@@ -14,7 +14,7 @@ A production-ready URL shortener service deployed on AWS ECS Fargate with blue/g
 ## Project Structure
 
 ```
-url-shortener/
+ECS-V2-Project/
 ├── app/                    # Application code
 │   ├── src/               # Python FastAPI application
 │   ├── tests/             # Unit tests

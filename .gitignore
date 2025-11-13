@@ -1,57 +1,54 @@
 # Terraform
-**/.terraform/
-**/.terraform.lock.hcl
-**/*.tfstate
-**/*.tfstate.*
-**/.terraform.tfstate.lock.info
-**/crash.log
-**/override.tf
-**/override.tf.json
-**/*_override.tf
-**/*_override.tf.json
-**/*.tfvars
-!**/terraform.tfvars.example
-
-# Terraform provider binaries (large files)
-**/terraform-provider-*
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!terraform.tfvars.example
+.terraform.tfstate.lock.info
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Python
-**/__pycache__/
-**/*.py[cod]
-**/*$py.class
-**/*.so
-**/.Python
-**/venv/
-**/env/
-**/ENV/
-**/.venv
-**/*.egg-info/
-**/dist/
-**/build/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
 
 # IDE
-**/.vscode/
-**/.idea/
-**/*.swp
-**/*.swo
-**/*~
-**/.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
 
 # OS
-**/.DS_Store
-**/Thumbs.db
-**/desktop.ini
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Logs
-**/*.log
-**/logs/
+*.log
+logs/
 
 # Environment variables
-**/.env
-**/.env.local
+.env
+.env.local
 
 # Temporary files
-**/*.tmp
-**/*.temp
-**/.cache/
+*.tmp
+*.temp
+.cache/
 
