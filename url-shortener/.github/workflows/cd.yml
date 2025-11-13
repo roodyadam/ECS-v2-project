@@ -1,0 +1,124 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.5.0
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./infra/envs/dev
+        run: terraform init
+
+      - name: Terraform Format Check
+        working-directory: ./infra/envs/dev
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        working-directory: ./infra/envs/dev
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ./infra/envs/dev
+        run: terraform plan -out=tfplan
+
+  terraform-apply-and-deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: []
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./infra/envs/dev
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ./infra/envs/dev
+        run: terraform apply -auto-approve
+
+
+      - name: Get infrastructure outputs
+        id: get-outputs
+        working-directory: ./infra/envs/dev
+        run: |
+          CD_APP=$(terraform output -raw codedeploy_app_name)
+          CD_GROUP=$(terraform output -raw codedeploy_deployment_group_name)
+          CLUSTER_NAME=$(terraform output -raw ecs_cluster_name)
+          SERVICE_NAME=$(terraform output -raw ecs_service_name)
+          ECR_URL=$(terraform output -raw ecr_repository_url)
+          echo "cd_app=$CD_APP" >> $GITHUB_OUTPUT
+          echo "cd_group=$CD_GROUP" >> $GITHUB_OUTPUT
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "service_name=$SERVICE_NAME" >> $GITHUB_OUTPUT
+          echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
+
+      - name: Get current task definition
+        id: get-task-def
+        run: |
+          TASK_DEF_ARN=$(aws ecs describe-services --cluster ${{ steps.get-outputs.outputs.cluster_name }} --services ${{ steps.get-outputs.outputs.service_name }} --query 'services[0].taskDefinition' --output text)
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json)
+          NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:${{ github.sha }}"
+          TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE')
+          TASK_DEF=$(echo $TASK_DEF | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+          echo "$TASK_DEF" > task-definition.json
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Register new task definition
+        id: register-task-def
+        run: |
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "new_task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: Prepare AppSpec file
+        run: |
+          sed "s|<TASK_DEFINITION>|${{ steps.register-task-def.outputs.new_task_def_arn }}|g" appspec.yml > appspec-final.yml
+          cat appspec-final.yml
+
+      - name: Create CodeDeploy deployment
+        run: |
+          aws deploy create-deployment \
+            --application-name ${{ steps.get-outputs.outputs.cd_app }} \
+            --deployment-group-name ${{ steps.get-outputs.outputs.cd_group }} \
+            --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yml | base64)}" \
+            --description "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
+

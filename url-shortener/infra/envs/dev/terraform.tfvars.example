@@ -1,0 +1,16 @@
+# Copy this file to terraform.tfvars and update with your values
+
+project_name = "url-shortener"
+aws_region   = "us-east-1"
+vpc_cidr     = "10.0.0.0/16"
+
+# Your GitHub repository in format: owner/repo
+github_repo = "your-username/url-shortener"
+
+# Set to false if you've already created the GitHub OIDC provider
+create_github_oidc_provider = true
+
+# Number of ECS tasks to run
+ecs_desired_count = 2
+
+
