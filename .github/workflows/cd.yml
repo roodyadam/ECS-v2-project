@@ -151,6 +151,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./infra/envs/dev
+        run: terraform init
+
       - name: Get infrastructure outputs
         id: get-outputs
         working-directory: ./infra/envs/dev
