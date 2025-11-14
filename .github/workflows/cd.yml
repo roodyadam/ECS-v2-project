@@ -140,10 +140,12 @@ jobs:
           TASK_DEF_ARN=$(aws ecs describe-services --cluster ${{ steps.get-outputs.outputs.cluster_name }} --services ${{ steps.get-outputs.outputs.service_name }} --query 'services[0].taskDefinition' --output text)
           TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json)
           NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:${{ github.sha }}"
+          echo "Updating task definition with image: $NEW_IMAGE"
           TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE')
           TASK_DEF=$(echo $TASK_DEF | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
           echo "$TASK_DEF" > task-definition.json
           echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "New image will be: $NEW_IMAGE"
 
       - name: Register new task definition
         id: register-task-def
@@ -154,11 +156,15 @@ jobs:
       - name: Prepare AppSpec file
         run: |
           sed "s|<TASK_DEFINITION>|${{ steps.register-task-def.outputs.new_task_def_arn }}|g" appspec.yml > appspec-final.yml
+          echo "AppSpec file prepared:"
+          cat appspec-final.yml
 
       - name: Create CodeDeploy deployment
         run: |
+          # Base64 encode without line breaks (Linux uses -w 0, macOS uses no flag)
+          APPSPEC_B64=$(cat appspec-final.yml | base64 -w 0 2>/dev/null || cat appspec-final.yml | base64 | tr -d '\n')
           aws deploy create-deployment \
             --application-name ${{ steps.get-outputs.outputs.cd_app }} \
             --deployment-group-name ${{ steps.get-outputs.outputs.cd_group }} \
-            --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yml | base64)}" \
+            --revision revisionType=AppSpecContent,appSpecContent="{content=$APPSPEC_B64}" \
             --description "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
