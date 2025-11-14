@@ -11,8 +11,7 @@ terraform {
   }
 
   backend "s3" {
-    # Update these values after creating the backend
-    bucket         = "your-terraform-state-bucket-name"
+    bucket         = "ecs-v2-terraform-state-roodyadams-88975"
     key            = "envs/dev/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "terraform-state-lock"
@@ -99,6 +98,9 @@ module "codedeploy" {
   ecs_service_name        = module.ecs.service_name
   blue_target_group_name  = module.alb.blue_target_group_name
   green_target_group_name = module.alb.green_target_group_name
+  container_name          = "url-shortener"
+  container_port          = 8080
+  listener_arn            = module.alb.listener_arn
 }
 
 
