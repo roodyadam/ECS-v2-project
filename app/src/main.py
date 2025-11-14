@@ -5,6 +5,22 @@ from .ddb import put_mapping, get_mapping
 
 app = FastAPI()
 
+@app.get("/")
+def root():
+    return {
+        "service": "URL Shortener",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "GET /healthz - Health check endpoint",
+            "shorten": "POST /shorten - Create a short URL (body: {\"url\": \"https://example.com\"})",
+            "redirect": "GET /{short_id} - Redirect to original URL"
+        },
+        "example": {
+            "shorten": "POST /shorten with body: {\"url\": \"https://example.com\"}",
+            "redirect": "GET /100680ad (will redirect to the original URL)"
+        }
+    }
+
 @app.get("/healthz")
 def health():
     return {"status": "ok", "ts": int(time.time())}
