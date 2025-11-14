@@ -134,6 +134,18 @@ jobs:
           echo "service_name=$SERVICE_NAME" >> $GITHUB_OUTPUT
           echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
 
+      - name: Verify ECR image exists
+        run: |
+          NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:${{ github.sha }}"
+          echo "Checking if image exists: $NEW_IMAGE"
+          IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
+          IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
+          aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json || {
+            echo "::error::Image $NEW_IMAGE not found in ECR. Make sure CI workflow completed successfully."
+            exit 1
+          }
+          echo "✓ Image found in ECR"
+
       - name: Get current task definition
         id: get-task-def
         run: |
