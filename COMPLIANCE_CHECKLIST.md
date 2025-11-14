@@ -148,9 +148,9 @@
 
 ## ⚠️ Potential Issues / Notes
 
-1. **CodeDeploy Load Balancer Config**: The CodeDeploy module only references the blue target group in `load_balancer_info`. For ECS blue/green, this should work, but verify during deployment.
+1. **CodeDeploy Load Balancer Config**: ✅ Correct - For ECS blue/green, CodeDeploy only needs the production (blue) target group. It automatically manages the green target group during deployment.
 
-2. **ECR Repository Name**: CI workflow hardcodes `url-shortener-repo` - ensure this matches your Terraform ECR module output or make it dynamic.
+2. **ECR Repository Name**: ✅ Fixed - CI workflow uses `url-shortener-repo` which matches Terraform default (`${project_name}-repo` = `url-shortener-repo`). Comment added for clarity.
 
 3. **GitHub OIDC Setup**: Remember to:
    - Deploy infrastructure first to create OIDC provider
@@ -158,6 +158,8 @@
    - Add as GitHub secret: `AWS_ROLE_ARN`
 
 4. **Backend Configuration**: Update `infra/envs/dev/main.tf` with your actual S3 bucket name after creating the backend.
+
+5. **Leftover Directory**: ✅ Removed - The `url-shortener/` leftover directory has been cleaned up.
 
 ## 📋 Pre-Deployment Checklist
 

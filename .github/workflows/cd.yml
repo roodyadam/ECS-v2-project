@@ -48,10 +48,9 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform plan -out=tfplan
 
-  terraform-apply-and-deploy:
+  terraform-apply:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    needs: []
     
     steps:
       - name: Checkout code
@@ -76,6 +75,21 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform apply -auto-approve
 
+
+  codedeploy-deploy:
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Get infrastructure outputs
         id: get-outputs
@@ -112,7 +126,6 @@ jobs:
       - name: Prepare AppSpec file
         run: |
           sed "s|<TASK_DEFINITION>|${{ steps.register-task-def.outputs.new_task_def_arn }}|g" appspec.yml > appspec-final.yml
-          cat appspec-final.yml
 
       - name: Create CodeDeploy deployment
         run: |
@@ -121,4 +134,3 @@ jobs:
             --deployment-group-name ${{ steps.get-outputs.outputs.cd_group }} \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yml | base64)}" \
             --description "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
-
