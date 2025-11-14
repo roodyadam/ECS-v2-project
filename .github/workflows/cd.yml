@@ -97,6 +97,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Use commit SHA from workflow_run if triggered by CI, otherwise use default
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Validate AWS_ROLE_ARN secret
         run: |
