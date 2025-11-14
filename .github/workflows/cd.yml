@@ -149,8 +149,9 @@ jobs:
   codedeploy-deploy:
     runs-on: ubuntu-latest
     needs: terraform-apply
-    # Only run on push events or if CI workflow succeeded
-    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    # Only run after CI workflow completes successfully (ensures image is pushed to ECR)
+    # Don't run on push because CI may not have finished pushing the image yet
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     
     steps:
       - name: Checkout code
@@ -192,10 +193,17 @@ jobs:
       - name: Verify ECR image exists
         id: verify-image
         run: |
-          # Use commit SHA from workflow_run event if triggered by CI, otherwise use current SHA
-          COMMIT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          # When triggered by workflow_run, use the commit SHA from the CI workflow
+          # This ensures we're looking for the same image that CI just pushed
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "::error::Cannot determine commit SHA. This job should only run after CI workflow completes."
+            exit 1
+          fi
+          
           NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:$COMMIT_SHA"
           echo "Checking if image exists: $NEW_IMAGE"
+          echo "Looking for commit SHA: $COMMIT_SHA (from CI workflow)"
           IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
           IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
           
@@ -203,16 +211,11 @@ jobs:
           if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
             echo "✓ Image found in ECR with tag: $IMAGE_TAG"
           else
-            echo "::warning::Image with tag $IMAGE_TAG not found. Checking for 'latest' tag..."
-            # Fallback to latest tag if commit SHA tag doesn't exist
-            if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=latest --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
-              echo "::warning::Using 'latest' tag instead. CI may still be running or image was pushed with different tag."
-              NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:latest"
-              IMAGE_TAG="latest"
-            else
-              echo "::error::No image found in ECR (neither $IMAGE_TAG nor latest). Make sure CI workflow completed successfully."
-              exit 1
-            fi
+            echo "::error::Image with tag $IMAGE_TAG not found in ECR."
+            echo "::error::Expected image: $NEW_IMAGE"
+            echo "::error::This means CI workflow may not have pushed the image successfully."
+            echo "::error::Please check the CI workflow logs to ensure the image was pushed."
+            exit 1
           fi
           echo "Using image: $NEW_IMAGE"
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
