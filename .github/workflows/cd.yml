@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
 
+# Prevent concurrent runs to avoid Terraform state lock conflicts
+concurrency:
+  group: cd-workflow
+  cancel-in-progress: false  # Wait for current run to finish instead of canceling
+
 permissions:
   id-token: write
   contents: read
