@@ -23,4 +23,20 @@ variable "green_target_group_name" {
   type        = string
 }
 
+variable "container_name" {
+  description = "Name of the container"
+  type        = string
+}
+
+variable "container_port" {
+  description = "Port of the container"
+  type        = number
+  default     = 8080
+}
+
+variable "listener_arn" {
+  description = "ARN of the ALB listener"
+  type        = string
+}
+
 

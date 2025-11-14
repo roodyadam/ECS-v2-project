@@ -71,7 +71,13 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
   })
 }
 
-# GitHub OIDC Provider (one-time setup, but we'll create it here)
+# Data source to get existing GitHub OIDC Provider
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+# GitHub OIDC Provider (only create if create_github_oidc_provider is true)
+# Note: If provider already exists, set create_github_oidc_provider = false in terraform.tfvars
 resource "aws_iam_openid_connect_provider" "github" {
   count = var.create_github_oidc_provider ? 1 : 0
 
@@ -101,7 +107,7 @@ resource "aws_iam_role" "github_deploy" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
+          Federated = var.create_github_oidc_provider && length(aws_iam_openid_connect_provider.github) > 0 ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {

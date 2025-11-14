@@ -38,3 +38,8 @@ output "green_target_group_name" {
   value       = aws_lb_target_group.green.name
 }
 
+output "listener_arn" {
+  description = "ARN of the ALB listener"
+  value       = aws_lb_listener.main.arn
+}
+

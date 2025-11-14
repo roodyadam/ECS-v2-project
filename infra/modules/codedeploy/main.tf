@@ -41,9 +41,12 @@ resource "aws_codedeploy_app" "main" {
 
 # CodeDeploy Deployment Group
 resource "aws_codedeploy_deployment_group" "main" {
-  app_name              = aws_codedeploy_app.main.name
-  deployment_group_name = "${var.project_name}-dg"
-  service_role_arn      = aws_iam_role.codedeploy.arn
+  app_name               = aws_codedeploy_app.main.name
+  deployment_group_name   = "${var.project_name}-dg"
+  service_role_arn        = aws_iam_role.codedeploy.arn
+  # Must specify an ECS deployment config (even for blue/green)
+  # The blue_green_deployment_config block handles the blue/green strategy
+  deployment_config_name  = "CodeDeployDefault.ECSAllAtOnce"
 
   ecs_service {
     cluster_name = var.ecs_cluster_name
@@ -55,9 +58,8 @@ resource "aws_codedeploy_deployment_group" "main" {
       action_on_timeout = "CONTINUE_DEPLOYMENT"
     }
 
-    green_fleet_provisioning_option {
-      action = "COPY_AUTO_SCALING_GROUP"
-    }
+    # For ECS, green_fleet_provisioning_option is not supported
+    # ECS automatically provisions the green fleet from the new task definition
 
     terminate_blue_instances_on_deployment_success {
       action                           = "TERMINATE"
@@ -70,9 +72,18 @@ resource "aws_codedeploy_deployment_group" "main" {
     events  = ["DEPLOYMENT_FAILURE"]
   }
 
+  # For ECS CodeDeploy, load_balancer_info is required with target_group_pair_info
   load_balancer_info {
-    target_group_info_list {
-      name = var.blue_target_group_name
+    target_group_pair_info {
+      target_group {
+        name = var.blue_target_group_name
+      }
+      target_group {
+        name = var.green_target_group_name
+      }
+      prod_traffic_route {
+        listener_arns = [var.listener_arn]
+      }
     }
   }
 

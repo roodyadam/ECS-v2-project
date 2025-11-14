@@ -21,30 +21,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate AWS_ROLE_ARN secret
+        id: check-secret
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "::warning::AWS_ROLE_ARN secret is not set. Terraform plan will be skipped."
+            echo "::warning::Set up the secret after initial infrastructure deployment."
+            echo "secret_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "secret_exists=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Configure AWS credentials
+        if: steps.check-secret.outputs.secret_exists == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
+        if: steps.check-secret.outputs.secret_exists == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
+        if: steps.check-secret.outputs.secret_exists == 'true'
         working-directory: ./infra/envs/dev
         run: terraform init
 
       - name: Terraform Format Check
+        if: steps.check-secret.outputs.secret_exists == 'true'
         working-directory: ./infra/envs/dev
         run: terraform fmt -check
 
       - name: Terraform Validate
+        if: steps.check-secret.outputs.secret_exists == 'true'
         working-directory: ./infra/envs/dev
         run: terraform validate
 
       - name: Terraform Plan
+        if: steps.check-secret.outputs.secret_exists == 'true'
         working-directory: ./infra/envs/dev
         run: terraform plan -out=tfplan
 
@@ -55,6 +72,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate AWS_ROLE_ARN secret
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "::error::AWS_ROLE_ARN secret is not set!"
+            echo "::error::For initial deployment, you must:"
+            echo "::error::1. Deploy infrastructure manually: cd infra/envs/dev && terraform apply"
+            echo "::error::2. Get role ARN: terraform output github_deploy_role_arn"
+            echo "::error::3. Add it as GitHub secret: AWS_ROLE_ARN"
+            exit 1
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
