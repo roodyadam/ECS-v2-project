@@ -35,6 +35,9 @@ jobs:
           pip install pytest pytest-asyncio httpx
 
       - name: Run unit tests
+        env:
+          AWS_REGION: us-east-1
+          TABLE_NAME: test-table
         run: |
           cd app
           PYTHONPATH=. pytest tests/ -v
