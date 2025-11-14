@@ -1,31 +1,44 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch
-from src.main import app
+from unittest.mock import patch, MagicMock
+import pytest
 
-client = TestClient(app)
+# Patch _get_table before importing app to prevent boto3 initialization
+@pytest.fixture(autouse=True, scope="function")
+def mock_dynamodb():
+    """Automatically mock DynamoDB for all tests"""
+    with patch('src.ddb._get_table') as mock_get_table:
+        mock_table = MagicMock()
+        mock_get_table.return_value = mock_table
+        yield mock_table
 
-def test_health():
-    r = client.get("/healthz")
+# Import app inside each test to ensure mocks are active
+@pytest.fixture
+def app_client():
+    """Create a test client with mocked DynamoDB"""
+    from src.main import app
+    return TestClient(app)
+
+def test_health(app_client):
+    r = app_client.get("/healthz")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
 
-@patch('src.ddb.put_mapping')
-@patch('src.ddb.get_mapping')
-def test_shorten(mock_get, mock_put):
-    r = client.post("/shorten", json={"url": "https://example.com"})
+def test_shorten(app_client, mock_dynamodb):
+    r = app_client.post("/shorten", json={"url": "https://example.com"})
     assert r.status_code == 200
     assert "short" in r.json()
     assert r.json()["url"] == "https://example.com"
-    mock_put.assert_called_once()
+    # Verify put_item was called
+    mock_dynamodb.put_item.assert_called_once()
 
-@patch('src.ddb.get_mapping')
-def test_resolve_not_found(mock_get):
-    mock_get.return_value = None
-    r = client.get("/nonexistent")
+def test_resolve_not_found(app_client, mock_dynamodb):
+    # Mock get_item to return empty response (no Item key)
+    mock_dynamodb.get_item.return_value = {}
+    r = app_client.get("/nonexistent")
     assert r.status_code == 404
 
-@patch('src.ddb.get_mapping')
-def test_resolve_found(mock_get):
-    mock_get.return_value = {"id": "abc12345", "url": "https://example.com"}
-    r = client.get("/abc12345", follow_redirects=False)
+def test_resolve_found(app_client, mock_dynamodb):
+    # Mock get_item to return an item
+    mock_dynamodb.get_item.return_value = {"Item": {"id": "abc12345", "url": "https://example.com"}}
+    r = app_client.get("/abc12345", follow_redirects=False)
     assert r.status_code == 307  # Temporary redirect
