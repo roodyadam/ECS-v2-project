@@ -176,23 +176,38 @@ jobs:
           echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
 
       - name: Verify ECR image exists
+        id: verify-image
         run: |
           NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:${{ github.sha }}"
           echo "Checking if image exists: $NEW_IMAGE"
           IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
           IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
-          aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json || {
-            echo "::error::Image $NEW_IMAGE not found in ECR. Make sure CI workflow completed successfully."
-            exit 1
-          }
-          echo "✓ Image found in ECR"
+          
+          # Try to find the image with the commit SHA tag
+          if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
+            echo "✓ Image found in ECR with tag: $IMAGE_TAG"
+          else
+            echo "::warning::Image with tag $IMAGE_TAG not found. Checking for 'latest' tag..."
+            # Fallback to latest tag if commit SHA tag doesn't exist
+            if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=latest --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
+              echo "::warning::Using 'latest' tag instead. CI may still be running or image was pushed with different tag."
+              NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:latest"
+              IMAGE_TAG="latest"
+            else
+              echo "::error::No image found in ECR (neither $IMAGE_TAG nor latest). Make sure CI workflow completed successfully."
+              exit 1
+            fi
+          fi
+          echo "Using image: $NEW_IMAGE"
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_uri=$NEW_IMAGE" >> $GITHUB_OUTPUT
 
       - name: Get current task definition
         id: get-task-def
         run: |
           TASK_DEF_ARN=$(aws ecs describe-services --cluster ${{ steps.get-outputs.outputs.cluster_name }} --services ${{ steps.get-outputs.outputs.service_name }} --query 'services[0].taskDefinition' --output text)
           TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json)
-          NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:${{ github.sha }}"
+          NEW_IMAGE="${{ steps.verify-image.outputs.image_uri }}"
           echo "Updating task definition with image: $NEW_IMAGE"
           TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE')
           TASK_DEF=$(echo $TASK_DEF | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
