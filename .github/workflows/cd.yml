@@ -50,6 +50,19 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform init
 
+      - name: Create terraform.tfvars
+        if: steps.check-secret.outputs.secret_exists == 'true'
+        working-directory: ./infra/envs/dev
+        run: |
+          cat > terraform.tfvars << EOF
+          project_name = "url-shortener"
+          aws_region   = "us-east-1"
+          vpc_cidr     = "10.0.0.0/16"
+          github_repo  = "roodyadam/ECS-v2-project"
+          create_github_oidc_provider = false
+          ecs_desired_count = 2
+          EOF
+
       - name: Terraform Format Check
         if: steps.check-secret.outputs.secret_exists == 'true'
         working-directory: ./infra/envs/dev
@@ -98,6 +111,20 @@ jobs:
       - name: Terraform Init
         working-directory: ./infra/envs/dev
         run: terraform init
+
+      - name: Create terraform.tfvars
+        working-directory: ./infra/envs/dev
+        run: |
+          cat > terraform.tfvars << EOF
+          project_name = "url-shortener"
+          aws_region   = "us-east-1"
+          vpc_cidr     = "10.0.0.0/16"
+          github_repo  = "roodyadam/ECS-v2-project"
+          create_github_oidc_provider = false
+          ecs_desired_count = 2
+          EOF
+          echo "Created terraform.tfvars:"
+          cat terraform.tfvars
 
       - name: Terraform Apply
         working-directory: ./infra/envs/dev
