@@ -8,7 +8,7 @@ WORKDIR /install
 
 # Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 2: Final runtime image
 FROM python:3.12-slim-bookworm
