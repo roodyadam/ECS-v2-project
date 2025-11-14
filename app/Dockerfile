@@ -17,10 +17,10 @@ FROM python:3.12-slim-bookworm
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Set environment variables
+# Note: TABLE_NAME is set at runtime by ECS task definition, not at build time
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/home/appuser/.local/bin:$PATH \
-    TABLE_NAME=${TABLE_NAME}
+    PATH=/home/appuser/.local/bin:$PATH
 
 # Set working directory
 WORKDIR /app
