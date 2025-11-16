@@ -181,7 +181,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./infra/envs/dev
-        run: terraform apply -auto-approve -lock-timeout=60s -input=false
+        run: terraform apply -auto-approve -input=false -lock=false
 
 
   codedeploy-deploy:
