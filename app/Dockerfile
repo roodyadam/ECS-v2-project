@@ -29,6 +29,9 @@ WORKDIR /app
 COPY --from=dependencies /install /home/appuser/.local
 
 # Copy application source code
+# Cache-busting build arg ensures code is always fresh in CI
+ARG BUILD_ID
+ENV BUILD_ID=${BUILD_ID}
 COPY src/ ./src
 
 # Change ownership to non-root user
