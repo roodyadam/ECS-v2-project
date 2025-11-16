@@ -13,11 +13,11 @@ def root():
         "endpoints": {
             "health": "GET /healthz - Health check endpoint",
             "shorten": "POST /shorten - Create a short URL (body: {\"url\": \"https://example.com\"})",
-            "redirect": "GET /{short_id} - Redirect to original URL"
+            "redirect": "GET /s/{short_id} - Redirect to original URL"
         },
         "example": {
             "shorten": "POST /shorten with body: {\"url\": \"https://example.com\"}",
-            "redirect": "GET /100680ad (will redirect to the original URL)"
+            "redirect": "GET /s/100680ad (will redirect to the original URL)"
         }
     }
 
@@ -35,7 +35,7 @@ async def shorten(req: Request):
     put_mapping(short, url)
     return {"short": short, "url": url}
 
-@app.get("/{short_id}")
+@app.get("/s/{short_id}")
 def resolve(short_id: str):
     item = get_mapping(short_id)
     if not item:
@@ -95,10 +95,10 @@ def ui():
         const j = await r.json();
         const out = document.getElementById('out');
         if(j.short){
-          const shortUrl = location.origin + '/' + j.short;
+          const shortUrl = location.origin + '/s/' + j.short;
           out.innerHTML = 'Response:<br><code>' + JSON.stringify(j) + '</code><br><br>'
             + 'Open: <a href=\"' + shortUrl + '\">' + shortUrl + '</a> '
-            + '(<a href=\"/' + j.short + '/preview\">preview</a>)';
+            + '(<a href=\"/s/' + j.short + '/preview\">preview</a>)';
         }else{
           out.textContent = 'Error: ' + JSON.stringify(j);
         }
@@ -108,7 +108,7 @@ def ui():
 </html>
 """
 
-@app.get("/{short_id}/preview", response_class=HTMLResponse)
+@app.get("/s/{short_id}/preview", response_class=HTMLResponse)
 def preview(short_id: str):
     item = get_mapping(short_id)
     dest = item["url"] if item else None
