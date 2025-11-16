@@ -2,9 +2,10 @@ name: cd
 
 on:
   workflow_run:
-    workflows: ["CI", "Final stage of ECS Project"]
+    workflows: ["CI", "Final process of the project"]
     types:
       - completed
+    branches: [main]
 
 concurrency:
   group: cd-${{ github.ref }}
@@ -84,7 +85,14 @@ jobs:
 
   terraform-apply:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: >
+      ${{
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        (github.event.workflow_run.name == 'CI' ||
+         github.event.workflow_run.name == 'Final process of the project') &&
+        github.event.workflow_run.head_branch == 'main'
+      }}
     
     steps:
       - name: Checkout code
