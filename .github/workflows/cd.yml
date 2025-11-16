@@ -5,8 +5,8 @@ on:
     workflows: ["CI", "Final stage of ECS Project"]
     types:
       - completed
-    branches:
-      - main
+    # Remove branch filter at trigger level to avoid missing events;
+    # we'll filter to 'main' inside job conditions using head_branch.
 
 concurrency:
   group: cd-${{ github.ref }}
@@ -86,8 +86,8 @@ jobs:
 
   terraform-apply:
     runs-on: ubuntu-latest
-    # Only run after the CI workflow has completed successfully on main
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    # Only run when triggered by workflow_run with success on main branch
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     
     steps:
       - name: Checkout code
