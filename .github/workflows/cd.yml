@@ -1,19 +1,14 @@
 name: CD
 
 on:
-  push:
-    branches: [main]
-  # Also trigger after CI workflow completes successfully
   workflow_run:
     workflows: ["CI"]
     types:
       - completed
-    branches: [main]
 
-# Prevent concurrent runs to avoid Terraform state lock conflicts
 concurrency:
-  group: cd-workflow
-  cancel-in-progress: false  # Wait for current run to finish instead of canceling
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   id-token: write
@@ -89,8 +84,8 @@ jobs:
 
   terraform-apply:
     runs-on: ubuntu-latest
-    # Only run on push events or if CI workflow succeeded
-    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    # Only run after CI workflow completes successfully
+    if: github.event.workflow_run.conclusion == 'success'
     
     steps:
       - name: Checkout code
