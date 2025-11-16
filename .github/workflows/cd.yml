@@ -304,8 +304,20 @@ jobs:
         run: |
           # Base64 encode without line breaks (GNU and BSD compatible)
           APPSPEC_B64=$(base64 -w 0 appspec-final.yml 2>/dev/null || base64 appspec-final.yml | tr -d '\n')
-          aws deploy create-deployment \
-            --application-name ${{ steps.get-outputs.outputs.cd_app }} \
-            --deployment-group-name ${{ steps.get-outputs.outputs.cd_group }} \
-            --revision revisionType=AppSpecContent,appSpecContent="{content=$APPSPEC_B64}" \
-            --description "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
+          # Build revision JSON to avoid shell quoting issues
+          cat > revision.json << EOF
+          {
+            "applicationName": "${{ steps.get-outputs.outputs.cd_app }}",
+            "deploymentGroupName": "${{ steps.get-outputs.outputs.cd_group }}",
+            "revision": {
+              "revisionType": "AppSpecContent",
+              "appSpecContent": {
+                "content": "${APPSPEC_B64}"
+              }
+            },
+            "description": "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
+          }
+          EOF
+          echo "Revision JSON:"
+          sed -n '1,120p' revision.json
+          aws deploy create-deployment --cli-input-json file://revision.json
