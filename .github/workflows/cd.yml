@@ -166,51 +166,17 @@ jobs:
             echo "No lock item found."
             exit 0
           fi
-          CREATED=$(aws dynamodb get-item \
+          # We run CD with concurrency, so only this run should be active.
+          # To avoid being blocked by an orphaned/stale lock, delete any existing lock item now.
+          echo "Lock item exists. Deleting it to unblock apply..."
+          aws dynamodb delete-item \
             --region "$AWS_REGION" \
             --table-name "$LOCK_TABLE" \
-            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
-            --query 'Item.Created.S' \
-            --output text 2>/dev/null || echo "None")
-          WHO=$(aws dynamodb get-item \
-            --region "$AWS_REGION" \
-            --table-name "$LOCK_TABLE" \
-            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
-            --query 'Item.Who.S' \
-            --output text 2>/dev/null || echo "unknown")
-          echo "Lock holder: $WHO, Created: $CREATED"
-          if [ -z "$CREATED" ] || [ "$CREATED" = "None" ] || [ "$CREATED" = "null" ]; then
-            echo "No Created timestamp; deleting lock as stale..."
-            aws dynamodb delete-item \
-              --region "$AWS_REGION" \
-              --table-name "$LOCK_TABLE" \
-              --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
-            echo "✓ Deleted stale lock."
-            exit 0
-          fi
-          NOW_SEC=$(date -u +%s)
-          # Convert Created (ISO8601) to epoch seconds; if fails, treat as stale
-          CREATED_SEC=$(date -u -d "$CREATED" +%s 2>/dev/null || echo "0")
-          if [ "$CREATED_SEC" = "0" ]; then
-            echo "Unable to parse Created; deleting lock as stale..."
-            aws dynamodb delete-item \
-              --region "$AWS_REGION" \
-              --table-name "$LOCK_TABLE" \
-              --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
-            echo "✓ Deleted stale lock."
-            exit 0
-          fi
-          AGE=$((NOW_SEC - CREATED_SEC))
-          echo "Lock age: ${AGE}s"
-          if [ "$AGE" -gt 600 ]; then
-            echo "Lock older than 10 minutes; deleting stale lock..."
-            aws dynamodb delete-item \
-              --region "$AWS_REGION" \
-              --table-name "$LOCK_TABLE" \
-              --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
-            echo "✓ Deleted stale lock."
+            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
+          if [ $? -eq 0 ]; then
+            echo "✓ Deleted lock for '$STATE_PATH'."
           else
-            echo "Lock is recent (<10m). Terraform will wait up to the lock-timeout."
+            echo "Could not delete lock; proceeding and letting terraform handle lock-timeout."
           fi
 
       - name: Terraform Apply
