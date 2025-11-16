@@ -1,5 +1,3 @@
-# Dev Environment Configuration
-# This ties together all the modules to create the complete infrastructure
 
 terraform {
   required_version = ">= 1.5"
@@ -23,16 +21,12 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# Data source to get the GitHub deploy role from bootstrap stack
-# This role is created in infra/global/bootstrap and persists across destroys
 data "aws_iam_role" "github_deploy" {
   name = "${var.project_name}-github-deploy-role"
 }
 
-# VPC Module
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -41,7 +35,6 @@ module "vpc" {
   aws_region   = var.aws_region
 }
 
-# DynamoDB Module
 module "dynamodb" {
   source = "../../modules/dynamodb"
 
@@ -49,7 +42,6 @@ module "dynamodb" {
   environment = "dev"
 }
 
-# IAM Module (ECS roles only - GitHub deploy role is in bootstrap stack)
 module "iam" {
   source = "../../modules/iam"
 
@@ -57,7 +49,6 @@ module "iam" {
   dynamodb_table_arn = module.dynamodb.table_arn
 }
 
-# ECR Module
 module "ecr" {
   source = "../../modules/ecr"
 
@@ -65,7 +56,6 @@ module "ecr" {
   environment     = "dev"
 }
 
-# ALB Module with WAF
 module "alb" {
   source = "../../modules/alb"
 
@@ -74,7 +64,6 @@ module "alb" {
   public_subnet_ids = module.vpc.public_subnet_ids
 }
 
-# ECS Module
 module "ecs" {
   source = "../../modules/ecs"
 
@@ -92,7 +81,6 @@ module "ecs" {
   desired_count         = var.ecs_desired_count
 }
 
-# CodeDeploy Module
 module "codedeploy" {
   source = "../../modules/codedeploy"
 

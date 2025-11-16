@@ -1,6 +1,3 @@
-# Terraform Backend Infrastructure
-# This creates the S3 bucket and DynamoDB table for Terraform state management
-# Run this once before deploying the main infrastructure
 
 terraform {
   required_version = ">= 1.5"
@@ -16,7 +13,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# S3 bucket for Terraform state
 resource "aws_s3_bucket" "terraform_state" {
   bucket = var.state_bucket_name
 
@@ -31,7 +27,6 @@ resource "aws_s3_bucket" "terraform_state" {
   }
 }
 
-# Enable versioning for state files
 resource "aws_s3_bucket_versioning" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -40,7 +35,6 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
-# Enable server-side encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -51,7 +45,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
   }
 }
 
-# Block public access
 resource "aws_s3_bucket_public_access_block" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -61,7 +54,6 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
-# DynamoDB table for state locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
   name           = var.lock_table_name
   billing_mode   = "PAY_PER_REQUEST"

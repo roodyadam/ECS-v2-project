@@ -1,7 +1,4 @@
-# ECS Module
-# Creates ECS cluster, service, and task definition for Fargate with CodeDeploy
 
-# CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}"
   retention_in_days = 7
@@ -11,7 +8,6 @@ resource "aws_cloudwatch_log_group" "app" {
   }
 }
 
-# ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
 
@@ -25,7 +21,6 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# Security group for ECS tasks
 resource "aws_security_group" "ecs" {
   name        = "${var.project_name}-ecs-sg"
   description = "Security group for ECS tasks"
@@ -52,7 +47,6 @@ resource "aws_security_group" "ecs" {
   }
 }
 
-# ECS Task Definition
 resource "aws_ecs_task_definition" "main" {
   family                   = "${var.project_name}-task"
   network_mode             = "awsvpc"
@@ -105,7 +99,6 @@ resource "aws_ecs_task_definition" "main" {
   }
 }
 
-# ECS Service (initially pointing to blue target group)
 resource "aws_ecs_service" "main" {
   name            = "${var.project_name}-service"
   cluster         = aws_ecs_cluster.main.id
@@ -125,12 +118,10 @@ resource "aws_ecs_service" "main" {
     container_port   = 8080
   }
 
-  # Use CodeDeploy for deployments
   deployment_controller {
     type = "CODE_DEPLOY"
   }
 
-  # Prevent Terraform from managing deployments (CodeDeploy handles this)
   lifecycle {
     ignore_changes = [task_definition, load_balancer]
   }

@@ -1,5 +1,3 @@
-# ECR Module
-# Creates ECR repository for container images
 
 resource "aws_ecr_repository" "app" {
   name                 = var.repository_name
@@ -21,7 +19,6 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
-# Lifecycle policy to keep only recent images
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
 

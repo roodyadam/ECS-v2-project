@@ -5,8 +5,6 @@ on:
     workflows: ["CI", "Final stage of ECS Project"]
     types:
       - completed
-    # Remove branch filter at trigger level to avoid missing events;
-    # we'll filter to 'main' inside job conditions using head_branch.
 
 concurrency:
   group: cd-${{ github.ref }}
@@ -86,14 +84,12 @@ jobs:
 
   terraform-apply:
     runs-on: ubuntu-latest
-    # Only run when triggered by workflow_run with success on main branch
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Use commit SHA from workflow_run if triggered by CI, otherwise use default
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Validate AWS_ROLE_ARN secret
@@ -140,24 +136,20 @@ jobs:
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          # Make this step non-fatal; treat any AWS/DynamoDB errors as "no stale lock"
           set +e
           LOCK_TABLE="terraform-state-lock"
           STATE_PATH="envs/dev/terraform.tfstate"
           echo "Checking for Terraform lock in table '$LOCK_TABLE' for '$STATE_PATH' (region: $AWS_REGION)"
-          # Verify credentials; if not available, skip gracefully
           aws sts get-caller-identity --region "$AWS_REGION" >/dev/null 2>&1
           if [ $? -ne 0 ]; then
             echo "AWS credentials not available yet; skipping stale lock check."
             exit 0
           fi
-          # Ensure table exists; if not, nothing to clear
           aws dynamodb describe-table --region "$AWS_REGION" --table-name "$LOCK_TABLE" >/dev/null 2>&1
           if [ $? -ne 0 ]; then
             echo "Lock table '$LOCK_TABLE' not found in $AWS_REGION; skipping."
             exit 0
           fi
-          # Query whether an item exists without relying on jq
           ITEM_LEN=$(aws dynamodb get-item \
             --region "$AWS_REGION" \
             --table-name "$LOCK_TABLE" \
@@ -168,8 +160,6 @@ jobs:
             echo "No lock item found."
             exit 0
           fi
-          # We run CD with concurrency, so only this run should be active.
-          # To avoid being blocked by an orphaned/stale lock, delete any existing lock item now.
           echo "Lock item exists. Deleting it to unblock apply..."
           aws dynamodb delete-item \
             --region "$AWS_REGION" \
@@ -189,14 +179,12 @@ jobs:
   codedeploy-deploy:
     runs-on: ubuntu-latest
     needs: terraform-apply
-    # Only run after terraform-apply succeeds (and only when triggered by CI workflow completion)
     if: ${{ needs.terraform-apply.result == 'success' }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Use commit SHA from workflow_run if triggered by CI, otherwise use default
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Configure AWS credentials
@@ -232,8 +220,6 @@ jobs:
       - name: Verify ECR image exists
         id: verify-image
         run: |
-          # When triggered by workflow_run, use the commit SHA from the CI workflow
-          # This ensures we're looking for the same image that CI just pushed
           COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
           if [ -z "$COMMIT_SHA" ]; then
             echo "::error::Cannot determine commit SHA. This job should only run after CI workflow completes."
@@ -246,7 +232,6 @@ jobs:
           IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
           IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
           
-          # Try to find the image with the commit SHA tag
           if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
             echo "✓ Image found in ECR with tag: $IMAGE_TAG"
           else
@@ -284,7 +269,6 @@ jobs:
         env:
           NEW_TASK_DEF_ARN: ${{ steps.register-task-def.outputs.new_task_def_arn }}
         run: |
-          # Write appspec without leading indentation using printf (avoid here-doc delimiter issues)
           printf '%s\n' \
           'version: 0.0' \
           'Resources:' \
@@ -297,29 +281,10 @@ jobs:
           '          ContainerPort: 8080' \
           '        PlatformVersion: "LATEST"' \
           > appspec-final.yml
-          # Inject the new task definition ARN
           sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
-          echo "AppSpec YAML prepared:"
-          cat appspec-final.yml
+          echo "Prepared AppSpec."
 
       - name: Create CodeDeploy deployment
         run: |
-          # Read YAML as raw text and JSON-escape it (no base64; CodeDeploy expects raw YAML/JSON in 'content')
           CONTENT=$(jq -Rs . < appspec-final.yml)
-          # Build revision JSON to avoid shell quoting issues
-          cat > revision.json << EOF
-          {
-            "applicationName": "${{ steps.get-outputs.outputs.cd_app }}",
-            "deploymentGroupName": "${{ steps.get-outputs.outputs.cd_group }}",
-            "revision": {
-              "revisionType": "AppSpecContent",
-              "appSpecContent": {
-                "content": ${CONTENT}
-              }
-            },
-            "description": "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
-          }
-          EOF
-          echo "Revision JSON:"
-          sed -n '1,160p' revision.json
-          aws deploy create-deployment --cli-input-json file://revision.json
+          aws deploy create-deployment --cli-input-json "$(jq -n --arg app '${{ steps.get-outputs.outputs.cd_app }}' --arg dg '${{ steps.get-outputs.outputs.cd_group }}' --arg content "$CONTENT" '{applicationName:$app, deploymentGroupName:$dg, revision:{revisionType:"AppSpecContent", appSpecContent:{content: ($content|fromjson)}}, description:"Deployment from GitHub Actions"}}")"

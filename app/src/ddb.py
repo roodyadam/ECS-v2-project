@@ -1,6 +1,5 @@
 import os, boto3
 
-# Lazy-load the table to avoid boto3 initialization during imports (helps with testing)
 _table = None
 
 def _get_table():

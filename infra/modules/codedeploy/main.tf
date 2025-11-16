@@ -1,7 +1,4 @@
-# CodeDeploy Module
-# Creates CodeDeploy application and deployment group for blue/green ECS deployments
 
-# IAM role for CodeDeploy
 resource "aws_iam_role" "codedeploy" {
   name = "${var.project_name}-codedeploy-role"
 
@@ -23,13 +20,11 @@ resource "aws_iam_role" "codedeploy" {
   }
 }
 
-# Attach AWS managed policy for CodeDeploy to ECS
 resource "aws_iam_role_policy_attachment" "codedeploy" {
   role       = aws_iam_role.codedeploy.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
-# CodeDeploy Application
 resource "aws_codedeploy_app" "main" {
   compute_platform = "ECS"
   name             = "${var.project_name}-app"
@@ -39,13 +34,10 @@ resource "aws_codedeploy_app" "main" {
   }
 }
 
-# CodeDeploy Deployment Group
 resource "aws_codedeploy_deployment_group" "main" {
   app_name               = aws_codedeploy_app.main.name
   deployment_group_name   = "${var.project_name}-dg"
   service_role_arn        = aws_iam_role.codedeploy.arn
-  # Must specify an ECS deployment config (even for blue/green)
-  # The blue_green_deployment_config block handles the blue/green strategy
   deployment_config_name  = "CodeDeployDefault.ECSAllAtOnce"
 
   ecs_service {
@@ -58,8 +50,6 @@ resource "aws_codedeploy_deployment_group" "main" {
       action_on_timeout = "CONTINUE_DEPLOYMENT"
     }
 
-    # For ECS, green_fleet_provisioning_option is not supported
-    # ECS automatically provisions the green fleet from the new task definition
 
     terminate_blue_instances_on_deployment_success {
       action                           = "TERMINATE"
@@ -72,7 +62,6 @@ resource "aws_codedeploy_deployment_group" "main" {
     events  = ["DEPLOYMENT_FAILURE"]
   }
 
-  # For ECS CodeDeploy, load_balancer_info is required with target_group_pair_info
   load_balancer_info {
     target_group_pair_info {
       target_group {

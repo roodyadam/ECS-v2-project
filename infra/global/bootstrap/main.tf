@@ -21,14 +21,11 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Data source to get existing GitHub OIDC Provider (if it exists)
 data "aws_iam_openid_connect_provider" "github" {
   count = var.create_github_oidc_provider ? 0 : 1
   url   = "https://token.actions.githubusercontent.com"
 }
 
-# GitHub OIDC Provider (only create if create_github_oidc_provider is true)
-# Note: If provider already exists, set create_github_oidc_provider = false in terraform.tfvars
 resource "aws_iam_openid_connect_provider" "github" {
   count = var.create_github_oidc_provider ? 1 : 0
 
@@ -50,12 +47,10 @@ resource "aws_iam_openid_connect_provider" "github" {
   }
 }
 
-# Local value to get the OIDC provider ARN (either from resource or data source)
 locals {
   oidc_provider_arn = var.create_github_oidc_provider && length(aws_iam_openid_connect_provider.github) > 0 ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 }
 
-# GitHub Actions Deploy Role (for CI/CD via OIDC)
 resource "aws_iam_role" "github_deploy" {
   name = "${var.project_name}-github-deploy-role"
 
@@ -87,7 +82,6 @@ resource "aws_iam_role" "github_deploy" {
   }
 }
 
-# GitHub deploy role policy - permissions for Terraform and CodeDeploy
 resource "aws_iam_role_policy" "github_deploy" {
   name = "${var.project_name}-github-deploy-policy"
   role = aws_iam_role.github_deploy.id

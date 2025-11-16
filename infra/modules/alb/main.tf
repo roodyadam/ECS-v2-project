@@ -1,7 +1,4 @@
-# ALB Module with WAF
-# Creates Application Load Balancer with WAF protection and blue/green target groups
 
-# Security group for ALB
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
   description = "Security group for Application Load Balancer"
@@ -28,7 +25,6 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
@@ -43,7 +39,6 @@ resource "aws_lb" "main" {
   }
 }
 
-# Blue target group
 resource "aws_lb_target_group" "blue" {
   name        = "${var.project_name}-blue-tg"
   port        = 8080
@@ -69,7 +64,6 @@ resource "aws_lb_target_group" "blue" {
   }
 }
 
-# Green target group
 resource "aws_lb_target_group" "green" {
   name        = "${var.project_name}-green-tg"
   port        = 8080
@@ -95,7 +89,6 @@ resource "aws_lb_target_group" "green" {
   }
 }
 
-# ALB Listener
 resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -106,8 +99,6 @@ resource "aws_lb_listener" "main" {
     target_group_arn = aws_lb_target_group.blue.arn
   }
 
-  # Let CodeDeploy adjust the listener's default action during blue/green shifts
-  # without Terraform immediately reverting it back to the initial target group.
   lifecycle {
     ignore_changes = [
       default_action
@@ -115,7 +106,6 @@ resource "aws_lb_listener" "main" {
   }
 }
 
-# WAF Web ACL
 resource "aws_wafv2_web_acl" "main" {
   name        = "${var.project_name}-waf"
   description = "WAF for ${var.project_name} ALB"
@@ -125,7 +115,6 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
-  # AWS Managed Rule - Common Rule Set
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
@@ -148,7 +137,6 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # AWS Managed Rule - Known Bad Inputs
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
@@ -171,7 +159,6 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # AWS Managed Rule - Linux Operating System
   rule {
     name     = "AWSManagedRulesLinuxRuleSet"
     priority = 3
@@ -194,6 +181,90 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
+  # Rate limit POST /shorten (count mode)
+  rule {
+    name     = "RateLimitShorten"
+    priority = 4
+
+    action { count {} }
+
+    statement {
+      rate_based_statement {
+        limit              = 60
+        aggregate_key_type = "IP"
+        scope_down_statement {
+          and_statement {
+            statement {
+              byte_match_statement {
+                search_string = "/shorten"
+                field_to_match { uri_path {} }
+                positional_constraint = "STARTS_WITH"
+                text_transformations { priority = 0 type = "NONE" }
+              }
+            }
+            statement {
+              byte_match_statement {
+                search_string = "POST"
+                field_to_match { method {} }
+                positional_constraint = "EXACTLY"
+                text_transformations { priority = 0 type = "NONE" }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-RateLimitShorten"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Enforce Content-Type application/json on POST /shorten (count mode)
+  rule {
+    name     = "ShortenJsonContentType"
+    priority = 5
+
+    action { count {} }
+
+    statement {
+      and_statement {
+        statement {
+          byte_match_statement {
+            search_string = "/shorten"
+            field_to_match { uri_path {} }
+            positional_constraint = "STARTS_WITH"
+            text_transformations { priority = 0 type = "NONE" }
+          }
+        }
+        statement {
+          byte_match_statement {
+            search_string = "POST"
+            field_to_match { method {} }
+            positional_constraint = "EXACTLY"
+            text_transformations { priority = 0 type = "NONE" }
+          }
+        }
+        statement {
+          byte_match_statement {
+            search_string = "application/json"
+            field_to_match { single_header { name = "content-type" } }
+            positional_constraint = "CONTAINS"
+            text_transformations { priority = 0 type = "LOWERCASE" }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-ShortenJsonContentType"
+      sampled_requests_enabled   = true
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${var.project_name}-waf-metric"
@@ -205,7 +276,6 @@ resource "aws_wafv2_web_acl" "main" {
   }
 }
 
-# Associate WAF with ALB
 resource "aws_wafv2_web_acl_association" "main" {
   resource_arn = aws_lb.main.arn
   web_acl_arn  = aws_wafv2_web_acl.main.arn

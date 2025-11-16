@@ -13,7 +13,7 @@ permissions:
 
 env:
   AWS_REGION: eu-west-2
-  ECR_REPOSITORY: url-shortener-repo  # Must match infra/envs/dev terraform.tfvars project_name + "-repo"
+  ECR_REPOSITORY: url-shortener-repo  
   CONTAINER_NAME: url-shortener
 
 jobs:
@@ -46,16 +46,6 @@ jobs:
       - name: Build Docker image
         run: |
           docker build --pull --no-cache -t $ECR_REPOSITORY:latest ./app
-
-      - name: Save Docker image
-        run: |
-          docker save $ECR_REPOSITORY:latest -o image.tar
-
-      - name: Upload Docker image
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: image.tar
 
   security-scan:
     runs-on: ubuntu-latest
@@ -121,16 +111,6 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: .
-
-      - name: Load Docker image
-        run: |
-          docker load -i image.tar
 
       - name: Build, tag, and push image to Amazon ECR
         env:

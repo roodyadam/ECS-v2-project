@@ -1,11 +1,8 @@
-# VPC Module
-# Creates VPC with private subnets only, VPC endpoints for AWS services (no NAT gateways)
 
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -16,7 +13,6 @@ resource "aws_vpc" "main" {
   }
 }
 
-# Private subnets (2 for high availability)
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
@@ -29,7 +25,6 @@ resource "aws_subnet" "private" {
   }
 }
 
-# Internet Gateway (needed for ALB in public subnets)
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -38,7 +33,6 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# Public subnets for ALB (required for internet-facing load balancer)
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
@@ -52,7 +46,6 @@ resource "aws_subnet" "public" {
   }
 }
 
-# Route table for public subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -66,14 +59,12 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Route table associations for public subnets
 resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Route table for private subnets (no internet route - uses VPC endpoints)
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
@@ -83,14 +74,12 @@ resource "aws_route_table" "private" {
   }
 }
 
-# Route table associations for private subnets
 resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# Security group for VPC endpoints
 resource "aws_security_group" "vpc_endpoint" {
   name        = "${var.project_name}-vpc-endpoint-sg"
   description = "Security group for VPC endpoints"
@@ -115,7 +104,6 @@ resource "aws_security_group" "vpc_endpoint" {
   }
 }
 
-# VPC Gateway Endpoint for S3 (no cost, no security group needed)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
@@ -127,7 +115,6 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-# VPC Gateway Endpoint for DynamoDB (no cost, no security group needed)
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
@@ -139,7 +126,6 @@ resource "aws_vpc_endpoint" "dynamodb" {
   }
 }
 
-# VPC Interface Endpoint for ECR API
 resource "aws_vpc_endpoint" "ecr_api" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
@@ -153,7 +139,6 @@ resource "aws_vpc_endpoint" "ecr_api" {
   }
 }
 
-# VPC Interface Endpoint for ECR Docker
 resource "aws_vpc_endpoint" "ecr_dkr" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
@@ -167,7 +152,6 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   }
 }
 
-# VPC Interface Endpoint for CloudWatch Logs
 resource "aws_vpc_endpoint" "logs" {
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.logs"

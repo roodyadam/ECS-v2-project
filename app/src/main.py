@@ -44,7 +44,6 @@ def resolve(short_id: str):
 
 @app.on_event("startup")
 def _log_routes():
-    # Log registered routes after the app is fully initialized
     for _route in app.router.routes:
         try:
             print("route:", _route.path)
