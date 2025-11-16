@@ -34,11 +34,11 @@ def test_shorten(app_client, mock_dynamodb):
 def test_resolve_not_found(app_client, mock_dynamodb):
     # Mock get_item to return empty response (no Item key)
     mock_dynamodb.get_item.return_value = {}
-    r = app_client.get("/nonexistent")
+    r = app_client.get("/s/nonexistent")
     assert r.status_code == 404
 
 def test_resolve_found(app_client, mock_dynamodb):
     # Mock get_item to return an item
     mock_dynamodb.get_item.return_value = {"Item": {"id": "abc12345", "url": "https://example.com"}}
-    r = app_client.get("/abc12345", follow_redirects=False)
+    r = app_client.get("/s/abc12345", follow_redirects=False)
     assert r.status_code == 307  # Temporary redirect
