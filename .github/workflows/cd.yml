@@ -138,10 +138,23 @@ jobs:
         env:
           AWS_REGION: ${{ env.AWS_REGION }}
         run: |
-          set -euo pipefail
+          # Make this step non-fatal; treat any AWS/DynamoDB errors as "no stale lock"
+          set +e
           LOCK_TABLE="terraform-state-lock"
           STATE_PATH="envs/dev/terraform.tfstate"
           echo "Checking for Terraform lock in table '$LOCK_TABLE' for '$STATE_PATH' (region: $AWS_REGION)"
+          # Verify credentials; if not available, skip gracefully
+          aws sts get-caller-identity --region "$AWS_REGION" >/dev/null 2>&1
+          if [ $? -ne 0 ]; then
+            echo "AWS credentials not available yet; skipping stale lock check."
+            exit 0
+          fi
+          # Ensure table exists; if not, nothing to clear
+          aws dynamodb describe-table --region "$AWS_REGION" --table-name "$LOCK_TABLE" >/dev/null 2>&1
+          if [ $? -ne 0 ]; then
+            echo "Lock table '$LOCK_TABLE' not found in $AWS_REGION; skipping."
+            exit 0
+          fi
           # Query whether an item exists without relying on jq
           ITEM_LEN=$(aws dynamodb get-item \
             --region "$AWS_REGION" \
