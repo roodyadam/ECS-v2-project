@@ -42,12 +42,14 @@ def resolve(short_id: str):
         raise HTTPException(404, "not found")
     return RedirectResponse(item["url"])
 
-# Log the registered routes at startup to confirm image contains latest code
-for _route in app.router.routes:
-    try:
-        print("route:", _route.path)
-    except Exception:
-        pass
+@app.on_event("startup")
+def _log_routes():
+    # Log registered routes after the app is fully initialized
+    for _route in app.router.routes:
+        try:
+            print("route:", _route.path)
+        except Exception:
+            pass
 
 @app.get("/ui", response_class=HTMLResponse)
 def ui():
