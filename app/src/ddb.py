@@ -7,7 +7,7 @@ def _get_table():
     """Get or create the DynamoDB table resource (lazy initialization)"""
     global _table
     if _table is None:
-        region = os.environ.get("AWS_REGION", "us-east-1")
+        region = os.environ.get("AWS_REGION", "eu-west-2")
         table_name = os.environ.get("TABLE_NAME")
         if not table_name:
             raise ValueError("TABLE_NAME environment variable must be set")

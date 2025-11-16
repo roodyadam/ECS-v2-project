@@ -19,8 +19,8 @@ output "dynamodb_table_name" {
 }
 
 output "github_deploy_role_arn" {
-  description = "ARN of the GitHub deploy role (for OIDC)"
-  value       = module.iam.github_deploy_role_arn
+  description = "ARN of the GitHub deploy role (for OIDC) - from bootstrap stack"
+  value       = data.aws_iam_role.github_deploy.arn
   sensitive   = false
 }
 

@@ -11,9 +11,9 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "ecs-v2-terraform-state-roodyadams-88975"
+    bucket         = "ecs-v2-terraform-state-roodyadams-88975-eu-west-2"
     key            = "envs/dev/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "eu-west-2"
     dynamodb_table = "terraform-state-lock"
     encrypt        = true
   }
@@ -25,6 +25,12 @@ provider "aws" {
 
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
+
+# Data source to get the GitHub deploy role from bootstrap stack
+# This role is created in infra/global/bootstrap and persists across destroys
+data "aws_iam_role" "github_deploy" {
+  name = "${var.project_name}-github-deploy-role"
+}
 
 # VPC Module
 module "vpc" {
@@ -43,15 +49,12 @@ module "dynamodb" {
   environment = "dev"
 }
 
-# IAM Module
+# IAM Module (ECS roles only - GitHub deploy role is in bootstrap stack)
 module "iam" {
   source = "../../modules/iam"
 
-  project_name        = var.project_name
-  dynamodb_table_arn  = module.dynamodb.table_arn
-  aws_account_id      = data.aws_caller_identity.current.account_id
-  github_repo         = var.github_repo
-  create_github_oidc_provider = var.create_github_oidc_provider
+  project_name       = var.project_name
+  dynamodb_table_arn = module.dynamodb.table_arn
 }
 
 # ECR Module

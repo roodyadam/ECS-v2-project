@@ -1,19 +1,12 @@
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "url-shortener"
 }
 
 variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "eu-west-2"
-}
-
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
 }
 
 variable "github_repo" {
@@ -24,13 +17,6 @@ variable "github_repo" {
 variable "create_github_oidc_provider" {
   description = "Whether to create the GitHub OIDC provider (set to false if already exists)"
   type        = bool
-  default     = true
+  default     = false
 }
-
-variable "ecs_desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 2
-}
-
 
