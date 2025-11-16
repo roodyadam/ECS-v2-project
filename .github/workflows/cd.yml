@@ -285,7 +285,7 @@ jobs:
         run: |
           cat > appspec-final.json << 'EOF'
           {
-            "version": 0,
+            "version": "0.0",
             "Resources": [
               {
                 "TargetService": {
