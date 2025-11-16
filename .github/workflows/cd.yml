@@ -284,7 +284,22 @@ jobs:
           sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
           echo "Prepared AppSpec."
 
-      - name: Create CodeDeploy deployment
+      - name: Create CodeDeploy deployment (Base64 appspec, no jq)
         run: |
-          CONTENT=$(jq -Rs . < appspec-final.yml)
-          aws deploy create-deployment --cli-input-json "$(jq -n --arg app '${{ steps.get-outputs.outputs.cd_app }}' --arg dg '${{ steps.get-outputs.outputs.cd_group }}' --arg content "$CONTENT" '{applicationName:$app, deploymentGroupName:$dg, revision:{revisionType:"AppSpecContent", appSpecContent:{content: ($content|fromjson)}}, description:"Deployment from GitHub Actions"}}")"
+          CONTENT_B64=$(base64 -w 0 appspec-final.yml 2>/dev/null || base64 appspec-final.yml | tr -d '\n')
+          cat > revision.json <<EOF
+          {
+            "applicationName": "${{ steps.get-outputs.outputs.cd_app }}",
+            "deploymentGroupName": "${{ steps.get-outputs.outputs.cd_group }}",
+            "revision": {
+              "revisionType": "AppSpecContent",
+              "appSpecContent": {
+                "content": "$CONTENT_B64",
+                "encoding": "Base64",
+                "contentType": "application/x-yaml; charset=utf-8"
+              }
+            },
+            "description": "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
+          }
+          EOF
+          aws deploy create-deployment --cli-input-json file://revision.json
