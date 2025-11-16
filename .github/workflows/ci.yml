@@ -13,15 +13,18 @@ permissions:
 
 env:
   AWS_REGION: eu-west-2
-  ECR_REPOSITORY: url-shortener-repo  
+  ECR_REPOSITORY: url-shortener-repo
   CONTAINER_NAME: url-shortener
 
 jobs:
-  build-and-test:
+  build-test-scan-and-push:
     runs-on: ubuntu-latest
-    
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -29,66 +32,38 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install test deps
         run: |
-          cd app
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
           pip install pytest pytest-asyncio httpx
 
-      - name: Run unit tests
+      - name: Unit tests
         env:
-          AWS_REGION: eu-west-2
+          AWS_REGION: ${{ env.AWS_REGION }}
           TABLE_NAME: test-table
         run: |
           cd app
-          PYTHONPATH=. pytest tests/ -v
+          PYTHONPATH=. pytest -q
 
-      - name: Build Docker image
+      - name: Build container (no cache)
         run: |
           docker build --pull --no-cache -t $ECR_REPOSITORY:latest ./app
 
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: .
-
-      - name: Load Docker image
-        run: |
-          docker load -i image.tar
-
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@master
+      - name: Trivy scan -> SARIF
+        uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: ${{ env.ECR_REPOSITORY }}:latest
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload scan to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: trivy-results.sarif
 
-  push-to-ecr:
-    runs-on: ubuntu-latest
-    needs: security-scan
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -99,20 +74,15 @@ jobs:
           REPO: ${{ env.ECR_REPOSITORY }}
           REGION: ${{ env.AWS_REGION }}
         run: |
-          echo "Ensuring ECR repository '$REPO' exists in region '$REGION'..."
           if ! aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" >/dev/null 2>&1; then
-            echo "ECR repository '$REPO' not found. Creating..."
             aws ecr create-repository --repository-name "$REPO" --region "$REGION" >/dev/null
-            echo "✓ ECR repository created: $REPO"
-          else
-            echo "✓ ECR repository already exists"
           fi
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Push image to ECR (:sha and :latest)
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -121,4 +91,3 @@ jobs:
           docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "✓ Successfully pushed image with tag: $IMAGE_TAG"
