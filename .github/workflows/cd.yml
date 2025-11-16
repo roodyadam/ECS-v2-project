@@ -132,6 +132,64 @@ jobs:
           echo "Created terraform.tfvars:"
           cat terraform.tfvars
 
+      - name: Clear stale Terraform lock if older than 10 minutes
+        shell: bash
+        working-directory: ./infra/envs/dev
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          set -e
+          LOCK_TABLE="terraform-state-lock"
+          STATE_PATH="envs/dev/terraform.tfstate"
+          echo "Checking for Terraform lock in table '$LOCK_TABLE' for '$STATE_PATH' (region: $AWS_REGION)"
+          # Fetch the lock item; if none, we're done
+          ITEM_JSON=$(aws dynamodb get-item \
+            --region "$AWS_REGION" \
+            --table-name "$LOCK_TABLE" \
+            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
+            --output json || true)
+          HAS_ITEM=$(echo "$ITEM_JSON" | grep -c '"Item"')
+          if [ "$HAS_ITEM" -eq 0 ]; then
+            echo "No lock item found."
+            exit 0
+          fi
+          CREATED=$(aws dynamodb get-item \
+            --region "$AWS_REGION" \
+            --table-name "$LOCK_TABLE" \
+            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
+            --query 'Item.Created.S' \
+            --output text 2>/dev/null || echo "None")
+          WHO=$(aws dynamodb get-item \
+            --region "$AWS_REGION" \
+            --table-name "$LOCK_TABLE" \
+            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
+            --query 'Item.Who.S' \
+            --output text 2>/dev/null || echo "unknown")
+          echo "Lock holder: $WHO, Created: $CREATED"
+          if [ -z "$CREATED" ] || [ "$CREATED" = "None" ]; then
+            echo "No Created timestamp; deleting lock as stale..."
+            aws dynamodb delete-item \
+              --region "$AWS_REGION" \
+              --table-name "$LOCK_TABLE" \
+              --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
+            echo "✓ Deleted stale lock."
+            exit 0
+          fi
+          NOW_SEC=$(date -u +%s)
+          CREATED_SEC=$(date -u -d "$CREATED" +%s 2>/dev/null || echo 0)
+          AGE=$((NOW_SEC - CREATED_SEC))
+          echo "Lock age: ${AGE}s"
+          if [ "$AGE" -gt 600 ]; then
+            echo "Lock older than 10 minutes; deleting stale lock..."
+            aws dynamodb delete-item \
+              --region "$AWS_REGION" \
+              --table-name "$LOCK_TABLE" \
+              --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
+            echo "✓ Deleted stale lock."
+          else
+            echo "Lock is recent (<10m). Terraform will wait up to the lock-timeout."
+          fi
+
       - name: Terraform Apply
         working-directory: ./infra/envs/dev
         run: terraform apply -auto-approve -lock-timeout=60s -input=false
