@@ -228,12 +228,7 @@ jobs:
 
       - name: Create CodeDeploy deployment (Python escape, no jq)
         run: |
-          CONTENT=$(python - <<'PY'
-import json,sys
-with open('appspec-final.yml','r',encoding='utf-8') as f:
-    print(json.dumps(f.read()))
-PY
-)
+          CONTENT=$(python -c 'import json,sys;print(json.dumps(open("appspec-final.yml","r",encoding="utf-8").read()))')
           cat > revision.json <<EOF
           {
             "applicationName": "${{ steps.get-outputs.outputs.cd_app }}",
