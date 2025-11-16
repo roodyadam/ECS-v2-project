@@ -104,25 +104,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Wait for ECR repository
+      - name: Ensure ECR repository exists (eu-west-2)
+        env:
+          REPO: ${{ env.ECR_REPOSITORY }}
+          REGION: ${{ env.AWS_REGION }}
         run: |
-          echo "Waiting for ECR repository to be created by Terraform..."
-          echo "This ensures CD's terraform-apply has completed before we try to push."
-          echo "On first deployment, this may take a few minutes. On subsequent deployments, ECR already exists."
-          
-          for i in {1..30}; do
-            if aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
-              echo "✓ ECR repository found after $((i * 10)) seconds"
-              exit 0
-            fi
-            echo "Waiting for ECR repository... ($i/30) - checking again in 10 seconds"
-            sleep 10
-          done
-          
-          # If still doesn't exist after 5 minutes, fail
-          echo "::error::ECR repository '${{ env.ECR_REPOSITORY }}' not found after 5 minutes."
-          echo "::error::Make sure CD workflow's terraform-apply job has completed successfully."
-          exit 1
+          echo "Ensuring ECR repository '$REPO' exists in region '$REGION'..."
+          if ! aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" >/dev/null 2>&1; then
+            echo "ECR repository '$REPO' not found. Creating..."
+            aws ecr create-repository --repository-name "$REPO" --region "$REGION" >/dev/null
+            echo "✓ ECR repository created: $REPO"
+          else
+            echo "✓ ECR repository already exists"
+          fi
 
       - name: Login to Amazon ECR
         id: login-ecr
