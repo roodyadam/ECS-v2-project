@@ -278,32 +278,40 @@ jobs:
           NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "new_task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
-      - name: Prepare AppSpec file (safe)
+      - name: Prepare AppSpec file (JSON)
         id: make-appspec
         env:
           NEW_TASK_DEF_ARN: ${{ steps.register-task-def.outputs.new_task_def_arn }}
         run: |
-          cat > appspec-final.yml << 'EOF'
-          version: 0.0
-          Resources:
-            - TargetService:
-                Type: AWS::ECS::Service
-                Properties:
-                  TaskDefinition: "<TASK_DEFINITION>"
-                  LoadBalancerInfo:
-                    ContainerName: "url-shortener"
-                    ContainerPort: 8080
-                  PlatformVersion: "LATEST"
+          cat > appspec-final.json << 'EOF'
+          {
+            "version": 0,
+            "Resources": [
+              {
+                "TargetService": {
+                  "Type": "AWS::ECS::Service",
+                  "Properties": {
+                    "TaskDefinition": "<TASK_DEFINITION>",
+                    "LoadBalancerInfo": {
+                      "ContainerName": "url-shortener",
+                      "ContainerPort": 8080
+                    },
+                    "PlatformVersion": "LATEST"
+                  }
+                }
+              }
+            ]
+          }
           EOF
-          sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || \
-            sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
-          echo "AppSpec file prepared:"
-          sed -n '1,200p' appspec-final.yml
+          sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.json || \
+            sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.json
+          echo "AppSpec JSON prepared:"
+          sed -n '1,200p' appspec-final.json
 
       - name: Create CodeDeploy deployment
         run: |
           # Base64 encode without line breaks (GNU and BSD compatible)
-          APPSPEC_B64=$(base64 -w 0 appspec-final.yml 2>/dev/null || base64 appspec-final.yml | tr -d '\n')
+          APPSPEC_B64=$(base64 -w 0 appspec-final.json 2>/dev/null || base64 appspec-final.json | tr -d '\n')
           # Build revision JSON to avoid shell quoting issues
           cat > revision.json << EOF
           {
@@ -319,5 +327,5 @@ jobs:
           }
           EOF
           echo "Revision JSON:"
-          sed -n '1,120p' revision.json
+          sed -n '1,160p' revision.json
           aws deploy create-deployment --cli-input-json file://revision.json
