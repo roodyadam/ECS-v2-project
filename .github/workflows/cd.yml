@@ -284,22 +284,23 @@ jobs:
         env:
           NEW_TASK_DEF_ARN: ${{ steps.register-task-def.outputs.new_task_def_arn }}
         run: |
-          cat > appspec-final.yml << 'EOF'
-version: 0.0
-Resources:
-  - TargetService:
-      Type: AWS::ECS::Service
-      Properties:
-        TaskDefinition: "<TASK_DEFINITION>"
-        LoadBalancerInfo:
-          ContainerName: "url-shortener"
-          ContainerPort: 8080
-        PlatformVersion: "LATEST"
-EOF
-          sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || \
-            sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
+          # Write appspec without leading indentation using printf (avoid here-doc delimiter issues)
+          printf '%s\n' \
+          'version: 0.0' \
+          'Resources:' \
+          '  - TargetService:' \
+          '      Type: AWS::ECS::Service' \
+          '      Properties:' \
+          '        TaskDefinition: "<TASK_DEFINITION>"' \
+          '        LoadBalancerInfo:' \
+          '          ContainerName: "url-shortener"' \
+          '          ContainerPort: 8080' \
+          '        PlatformVersion: "LATEST"' \
+          > appspec-final.yml
+          # Inject the new task definition ARN
+          sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
           echo "AppSpec YAML prepared:"
-          sed -n '1,200p' appspec-final.yml
+          cat appspec-final.yml
 
       - name: Create CodeDeploy deployment
         run: |
