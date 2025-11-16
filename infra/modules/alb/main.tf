@@ -186,7 +186,9 @@ resource "aws_wafv2_web_acl" "main" {
     name     = "RateLimitShorten"
     priority = 4
 
-    action { count {} }
+    action {
+      count {}
+    }
 
     statement {
       rate_based_statement {
@@ -227,7 +229,9 @@ resource "aws_wafv2_web_acl" "main" {
     name     = "ShortenJsonContentType"
     priority = 5
 
-    action { count {} }
+    action {
+      count {}
+    }
 
     statement {
       and_statement {
