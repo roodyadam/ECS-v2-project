@@ -199,17 +199,27 @@ resource "aws_wafv2_web_acl" "main" {
             statement {
               byte_match_statement {
                 search_string = "/shorten"
-                field_to_match { uri_path {} }
+                field_to_match {
+                  uri_path {}
+                }
                 positional_constraint = "STARTS_WITH"
-                text_transformations { priority = 0 type = "NONE" }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
               }
             }
             statement {
               byte_match_statement {
                 search_string = "POST"
-                field_to_match { method {} }
+                field_to_match {
+                  method {}
+                }
                 positional_constraint = "EXACTLY"
-                text_transformations { priority = 0 type = "NONE" }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
               }
             }
           }
@@ -238,25 +248,42 @@ resource "aws_wafv2_web_acl" "main" {
         statement {
           byte_match_statement {
             search_string = "/shorten"
-            field_to_match { uri_path {} }
+            field_to_match {
+              uri_path {}
+            }
             positional_constraint = "STARTS_WITH"
-            text_transformations { priority = 0 type = "NONE" }
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
           }
         }
         statement {
           byte_match_statement {
             search_string = "POST"
-            field_to_match { method {} }
+            field_to_match {
+              method {}
+            }
             positional_constraint = "EXACTLY"
-            text_transformations { priority = 0 type = "NONE" }
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
           }
         }
         statement {
           byte_match_statement {
             search_string = "application/json"
-            field_to_match { single_header { name = "content-type" } }
+            field_to_match {
+              single_header {
+                name = "content-type"
+              }
+            }
             positional_constraint = "CONTAINS"
-            text_transformations { priority = 0 type = "LOWERCASE" }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
           }
         }
       }
