@@ -105,6 +105,14 @@ resource "aws_lb_listener" "main" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.blue.arn
   }
+
+  # Let CodeDeploy adjust the listener's default action during blue/green shifts
+  # without Terraform immediately reverting it back to the initial target group.
+  lifecycle {
+    ignore_changes = [
+      default_action
+    ]
+  }
 }
 
 # WAF Web ACL
