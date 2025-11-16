@@ -278,16 +278,32 @@ jobs:
           NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "new_task_def_arn=$NEW_TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
-      - name: Prepare AppSpec file
+      - name: Prepare AppSpec file (safe)
+        id: make-appspec
+        env:
+          NEW_TASK_DEF_ARN: ${{ steps.register-task-def.outputs.new_task_def_arn }}
         run: |
-          sed "s|<TASK_DEFINITION>|${{ steps.register-task-def.outputs.new_task_def_arn }}|g" appspec.yml > appspec-final.yml
+          cat > appspec-final.yml << 'EOF'
+          version: 0.0
+          Resources:
+            - TargetService:
+                Type: AWS::ECS::Service
+                Properties:
+                  TaskDefinition: "<TASK_DEFINITION>"
+                  LoadBalancerInfo:
+                    ContainerName: "url-shortener"
+                    ContainerPort: 8080
+                  PlatformVersion: "LATEST"
+          EOF
+          sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || \
+            sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
           echo "AppSpec file prepared:"
-          cat appspec-final.yml
+          sed -n '1,200p' appspec-final.yml
 
       - name: Create CodeDeploy deployment
         run: |
-          # Base64 encode without line breaks (Linux uses -w 0, macOS uses no flag)
-          APPSPEC_B64=$(cat appspec-final.yml | base64 -w 0 2>/dev/null || cat appspec-final.yml | base64 | tr -d '\n')
+          # Base64 encode without line breaks (GNU and BSD compatible)
+          APPSPEC_B64=$(base64 -w 0 appspec-final.yml 2>/dev/null || base64 appspec-final.yml | tr -d '\n')
           aws deploy create-deployment \
             --application-name ${{ steps.get-outputs.outputs.cd_app }} \
             --deployment-group-name ${{ steps.get-outputs.outputs.cd_group }} \
