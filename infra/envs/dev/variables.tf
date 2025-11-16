@@ -16,17 +16,6 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "github_repo" {
-  description = "GitHub repository in format 'owner/repo' (e.g., 'username/url-shortener')"
-  type        = string
-}
-
-variable "create_github_oidc_provider" {
-  description = "Whether to create the GitHub OIDC provider (set to false if already exists)"
-  type        = bool
-  default     = true
-}
-
 variable "ecs_desired_count" {
   description = "Desired number of ECS tasks"
   type        = number
