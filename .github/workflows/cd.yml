@@ -2,7 +2,7 @@ name: CD
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI", "Final stage of ECS Project"]
     types:
       - completed
 
@@ -302,8 +302,8 @@ EOF
 
       - name: Create CodeDeploy deployment
         run: |
-          # Base64 encode without line breaks (GNU and BSD compatible)
-          APPSPEC_B64=$(base64 -w 0 appspec-final.yml 2>/dev/null || base64 appspec-final.yml | tr -d '\n')
+          # Read YAML as raw text and JSON-escape it (no base64; CodeDeploy expects raw YAML/JSON in 'content')
+          CONTENT=$(jq -Rs . < appspec-final.yml)
           # Build revision JSON to avoid shell quoting issues
           cat > revision.json << EOF
           {
@@ -312,7 +312,7 @@ EOF
             "revision": {
               "revisionType": "AppSpecContent",
               "appSpecContent": {
-                "content": "${APPSPEC_B64}"
+                "content": ${CONTENT}
               }
             },
             "description": "Deployment triggered by GitHub Actions - Commit ${{ github.sha }}"
