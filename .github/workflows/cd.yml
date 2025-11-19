@@ -2,7 +2,7 @@ name: CD
 
 on:
   workflow_run:
-    workflows: ["CI", "Final process of the project"]
+    workflows: ["CI"]
     types:
       - completed
     branches: [main]
@@ -68,48 +68,22 @@ jobs:
           vpc_cidr     = "10.0.0.0/16"
           ecs_desired_count = 2
           EOF
-          echo "Created terraform.tfvars:"
-          cat terraform.tfvars
 
-      - name: Clear stale Terraform lock if older than 10 minutes
-        shell: bash
+      - name: Clear stale Terraform lock
         working-directory: ./infra/envs/dev
-        env:
-          AWS_REGION: ${{ env.AWS_REGION }}
         run: |
           set +e
-          LOCK_TABLE="terraform-state-lock"
-          STATE_PATH="envs/dev/terraform.tfstate"
-          echo "Checking for Terraform lock in table '$LOCK_TABLE' for '$STATE_PATH' (region: $AWS_REGION)"
-          aws sts get-caller-identity --region "$AWS_REGION" >/dev/null 2>&1
-          if [ $? -ne 0 ]; then
-            echo "AWS credentials not available yet; skipping stale lock check."
-            exit 0
-          fi
-          aws dynamodb describe-table --region "$AWS_REGION" --table-name "$LOCK_TABLE" >/dev/null 2>&1
-          if [ $? -ne 0 ]; then
-            echo "Lock table '$LOCK_TABLE' not found in $AWS_REGION; skipping."
-            exit 0
-          fi
-          ITEM_LEN=$(aws dynamodb get-item \
-            --region "$AWS_REGION" \
-            --table-name "$LOCK_TABLE" \
-            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}" \
-            --query 'length(Item)' \
-            --output text 2>/dev/null || echo "0")
-          if [ "$ITEM_LEN" = "0" ] || [ "$ITEM_LEN" = "None" ]; then
-            echo "No lock item found."
-            exit 0
-          fi
-          echo "Lock item exists. Deleting it to unblock apply..."
-          aws dynamodb delete-item \
-            --region "$AWS_REGION" \
-            --table-name "$LOCK_TABLE" \
-            --key "{\"LockID\":{\"S\":\"$STATE_PATH\"}}"
+          aws dynamodb get-item \
+            --region ${{ env.AWS_REGION }} \
+            --table-name terraform-state-lock \
+            --key '{"LockID":{"S":"envs/dev/terraform.tfstate"}}' \
+            --query 'Item' \
+            --output text >/dev/null 2>&1
           if [ $? -eq 0 ]; then
-            echo "✓ Deleted lock for '$STATE_PATH'."
-          else
-            echo "Could not delete lock; proceeding and letting terraform handle lock-timeout."
+            aws dynamodb delete-item \
+              --region ${{ env.AWS_REGION }} \
+              --table-name terraform-state-lock \
+              --key '{"LockID":{"S":"envs/dev/terraform.tfstate"}}' || true
           fi
 
       - name: Import existing ECR repository if needed
@@ -174,21 +148,16 @@ jobs:
           fi
           
           NEW_IMAGE="${{ steps.get-outputs.outputs.ecr_url }}:$COMMIT_SHA"
-          echo "Checking if image exists: $NEW_IMAGE"
-          echo "Looking for commit SHA: $COMMIT_SHA (from CI workflow)"
           IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
           IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
           
           if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
-            echo "✓ Image found in ECR with tag: $IMAGE_TAG"
-          else
             echo "::error::Image with tag $IMAGE_TAG not found in ECR."
             echo "::error::Expected image: $NEW_IMAGE"
             echo "::error::This means CI workflow may not have pushed the image successfully."
             echo "::error::Please check the CI workflow logs to ensure the image was pushed."
             exit 1
           fi
-          echo "Using image: $NEW_IMAGE"
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "image_uri=$NEW_IMAGE" >> $GITHUB_OUTPUT
 
@@ -198,12 +167,10 @@ jobs:
           TASK_DEF_ARN=$(aws ecs describe-services --cluster ${{ steps.get-outputs.outputs.cluster_name }} --services ${{ steps.get-outputs.outputs.service_name }} --query 'services[0].taskDefinition' --output text)
           TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json)
           NEW_IMAGE="${{ steps.verify-image.outputs.image_uri }}"
-          echo "Updating task definition with image: $NEW_IMAGE"
           TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE')
           TASK_DEF=$(echo $TASK_DEF | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
           echo "$TASK_DEF" > task-definition.json
           echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
-          echo "New image will be: $NEW_IMAGE"
 
       - name: Register new task definition
         id: register-task-def
@@ -229,7 +196,6 @@ jobs:
           '        PlatformVersion: "LATEST"' \
           > appspec-final.yml
           sed -i "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml || sed -i "" "s|<TASK_DEFINITION>|${NEW_TASK_DEF_ARN}|g" appspec-final.yml
-          echo "Prepared AppSpec."
 
       - name: Create CodeDeploy deployment (Python escape, no jq)
         run: |

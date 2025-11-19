@@ -1,6 +1,8 @@
 # Terraform
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
+*.tfstate.*.backup
 .terraform/
 .terraform.lock.hcl
 *.tfvars
@@ -11,6 +13,8 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+*.tfplan
+tfplan
 
 # Python
 __pycache__/
@@ -51,7 +55,3 @@ logs/
 *.tmp
 *.temp
 .cache/
-
-# Markdown (ignore all .md except README.md)
-*.md
-!README.md

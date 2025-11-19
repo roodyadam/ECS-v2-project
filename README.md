@@ -21,8 +21,10 @@ ECS-V2-Project/
 │   ├── Dockerfile         # Container definition
 │   └── requirements.txt   # Python dependencies
 ├── infra/                 # Terraform infrastructure
-│   ├── global/backend/   # Terraform state backend (run once)
-│   ├── modules/          # Reusable Terraform modules
+│   ├── global/            # Global infrastructure (run once)
+│   │   ├── backend/       # Terraform state backend
+│   │   └── bootstrap/     # GitHub OIDC provider & deploy role
+│   ├── modules/           # Reusable Terraform modules
 │   │   ├── vpc/          # VPC, subnets, endpoints
 │   │   ├── dynamodb/     # DynamoDB table
 │   │   ├── iam/          # IAM roles
@@ -33,8 +35,9 @@ ECS-V2-Project/
 │   └── envs/dev/         # Environment-specific configuration
 ├── .github/workflows/     # GitHub Actions CI/CD
 │   ├── ci.yml            # Build, test, scan, push to ECR
-│   └── cd.yml            # Terraform plan/apply, CodeDeploy
-└── appspec.yml           # CodeDeploy deployment specification
+│   ├── cd.yml            # Terraform apply, CodeDeploy
+│   └── destroy.yml       # Terraform destroy (manual trigger)
+└── README.md             # Project documentation
 ```
 
 ## Prerequisites
@@ -69,9 +72,9 @@ cp terraform.tfvars.example terraform.tfvars
 
 ### 3. Set Up GitHub OIDC
 
-1. Deploy infrastructure to create the OIDC provider and IAM role:
+1. Deploy bootstrap infrastructure to create the OIDC provider and IAM role:
    ```bash
-   cd infra/envs/dev
+   cd infra/global/bootstrap
    terraform init
    terraform apply
    ```
@@ -234,12 +237,23 @@ curl -I http://$ALB_DNS/{short_code}
 
 **⚠️ IMPORTANT**: Tear down resources to avoid ongoing costs:
 
+### Option 1: Using GitHub Actions (Recommended)
+
+1. Go to Actions → Destroy Infrastructure
+2. Click "Run workflow"
+3. Type "destroy" in the confirmation field
+4. Click "Run workflow"
+
+### Option 2: Manual Terraform Destroy
+
 ```bash
 cd infra/envs/dev
 terraform destroy -auto-approve
 ```
 
-Note: The backend S3 bucket and DynamoDB table should be kept for future use, or manually deleted if no longer needed.
+**Note**: 
+- The bootstrap resources (GitHub OIDC provider and deploy role) are kept separate and won't be destroyed
+- The backend S3 bucket and DynamoDB table should be kept for future use, or manually deleted if no longer needed
 
 ## Troubleshooting
 
