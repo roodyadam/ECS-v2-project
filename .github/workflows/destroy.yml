@@ -23,9 +23,15 @@ env:
 jobs:
   terraform-destroy:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm_destroy == 'destroy'
     
     steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "destroy" ]; then
+            echo "::error::You must type exactly 'destroy' to confirm. You typed: '${{ github.event.inputs.confirm_destroy }}'"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -43,12 +49,6 @@ jobs:
       - name: Terraform Init
         working-directory: ./infra/envs/dev
         run: terraform init
-
-      - name: Check Terraform state
-        working-directory: ./infra/envs/dev
-        run: |
-          echo "Checking Terraform state..."
-          terraform state list || echo "State is empty or not found"
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
