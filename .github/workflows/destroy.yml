@@ -1,0 +1,74 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "destroy" to confirm'
+        required: true
+        type: string
+
+concurrency:
+  group: destroy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  TF_VERSION: 1.5.0
+
+jobs:
+  terraform-destroy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_destroy == 'destroy'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate AWS_ROLE_ARN secret
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "::error::AWS_ROLE_ARN secret is not set!"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: ./infra/envs/dev
+        run: terraform init
+
+      - name: Create terraform.tfvars
+        working-directory: ./infra/envs/dev
+        run: |
+          cat > terraform.tfvars << EOF
+          project_name = "url-shortener"
+          aws_region   = "eu-west-2"
+          vpc_cidr     = "10.0.0.0/16"
+          ecs_desired_count = 2
+          EOF
+
+      - name: Clear Terraform lock
+        working-directory: ./infra/envs/dev
+        run: |
+          aws dynamodb delete-item \
+            --region ${{ env.AWS_REGION }} \
+            --table-name terraform-state-lock \
+            --key '{"LockID":{"S":"envs/dev/terraform.tfstate"}}' 2>/dev/null || true
+
+      - name: Terraform Destroy
+        working-directory: ./infra/envs/dev
+        run: terraform destroy -auto-approve -input=false
