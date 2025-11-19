@@ -15,6 +15,10 @@ resource "aws_iam_role" "ecs_execution" {
     ]
   })
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   tags = {
     Name = "${var.project_name}-ecs-execution-role"
   }
@@ -40,6 +44,10 @@ resource "aws_iam_role" "ecs_task" {
       }
     ]
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   tags = {
     Name = "${var.project_name}-ecs-task-role"
