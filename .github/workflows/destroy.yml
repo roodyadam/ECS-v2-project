@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Validate confirmation
         run: |
-          CONFIRM=$(echo "${{ github.event.inputs.confirm_destroy }}" | xargs)
+          CONFIRM=$(echo "${{ github.event.inputs.confirm_destroy }}" | tr -d '[:space:]')
           [ "$CONFIRM" != "destroy" ] && exit 1
 
       - name: Checkout code
