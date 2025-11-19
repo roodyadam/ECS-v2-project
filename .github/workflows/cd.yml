@@ -112,6 +112,12 @@ jobs:
             echo "Could not delete lock; proceeding and letting terraform handle lock-timeout."
           fi
 
+      - name: Import existing ECR repository if needed
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          terraform import module.ecr.aws_ecr_repository.app url-shortener-repo 2>/dev/null || true
+
       - name: Terraform Apply
         working-directory: ./infra/envs/dev
         run: terraform apply -auto-approve -input=false -lock=false
