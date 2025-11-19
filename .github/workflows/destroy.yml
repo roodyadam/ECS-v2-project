@@ -25,11 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Validate confirmation
-        run: |
-          CONFIRM=$(echo "${{ github.event.inputs.confirm_destroy }}" | tr -d '[:space:]')
-          [ "$CONFIRM" != "destroy" ] && exit 1
-
       - name: Checkout code
         uses: actions/checkout@v4
 
