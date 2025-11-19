@@ -69,6 +69,10 @@ jobs:
             --table-name terraform-state-lock \
             --key '{"LockID":{"S":"envs/dev/terraform.tfstate"}}' 2>/dev/null || true
 
+      - name: Verify Terraform state
+        working-directory: ./infra/envs/dev
+        run: terraform state list || echo "No state found or empty state"
+
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
-        run: terraform destroy -auto-approve -input=false
+        run: terraform destroy -auto-approve -input=false -lock=false
