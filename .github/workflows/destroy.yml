@@ -29,13 +29,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate AWS_ROLE_ARN secret
-        run: |
-          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
-            echo "::error::AWS_ROLE_ARN secret is not set!"
-            exit 1
-          fi
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -51,27 +44,11 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform init
 
-      - name: Create terraform.tfvars
+      - name: Check Terraform state
         working-directory: ./infra/envs/dev
         run: |
-          cat > terraform.tfvars << EOF
-          project_name = "url-shortener"
-          aws_region   = "eu-west-2"
-          vpc_cidr     = "10.0.0.0/16"
-          ecs_desired_count = 2
-          EOF
-
-      - name: Clear Terraform lock
-        working-directory: ./infra/envs/dev
-        run: |
-          aws dynamodb delete-item \
-            --region ${{ env.AWS_REGION }} \
-            --table-name terraform-state-lock \
-            --key '{"LockID":{"S":"envs/dev/terraform.tfstate"}}' 2>/dev/null || true
-
-      - name: Verify Terraform state
-        working-directory: ./infra/envs/dev
-        run: terraform state list || echo "No state found or empty state"
+          echo "Checking Terraform state..."
+          terraform state list || echo "State is empty or not found"
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
