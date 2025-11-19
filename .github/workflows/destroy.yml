@@ -27,10 +27,8 @@ jobs:
     steps:
       - name: Validate confirmation
         run: |
-          if [ "${{ github.event.inputs.confirm_destroy }}" != "destroy" ]; then
-            echo "::error::You must type exactly 'destroy' to confirm. You typed: '${{ github.event.inputs.confirm_destroy }}'"
-            exit 1
-          fi
+          CONFIRM=$(echo "${{ github.event.inputs.confirm_destroy }}" | xargs)
+          [ "$CONFIRM" != "destroy" ] && exit 1
 
       - name: Checkout code
         uses: actions/checkout@v4
