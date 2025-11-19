@@ -108,6 +108,7 @@ resource "aws_iam_role_policy" "github_deploy" {
           "iam:ListOpenIDConnectProviders",
           "iam:GetOpenIDConnectProvider",
           "iam:DeleteRole",
+          "iam:ListInstanceProfilesForRole",
           "iam:DeleteRolePolicy",
           "iam:DetachRolePolicy",
           "codedeploy:*",

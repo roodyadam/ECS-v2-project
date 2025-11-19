@@ -15,10 +15,6 @@ resource "aws_iam_role" "codedeploy" {
     ]
   })
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   tags = {
     Name = "${var.project_name}-codedeploy-role"
   }
