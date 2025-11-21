@@ -11,6 +11,43 @@ A production-ready URL shortener service deployed on AWS ECS Fargate with blue/g
 - **Deployments**: AWS CodeDeploy with blue/green strategy
 - **CI/CD**: GitHub Actions with OIDC authentication
 
+## Architecture
+
+![Architecture Diagram](images/Architecture-ecs-v2.jpg)
+
+### Architecture Explanation
+
+This diagram illustrates the complete architecture of the URL shortener service deployed on AWS. The system follows a production-ready, cost-optimized design with security best practices.
+
+**Traffic Flow:**
+1. **Internet** → Requests enter through the public internet
+2. **AWS WAF** → Filters and protects against common web attacks (SQL injection, XSS, etc.)
+3. **Application Load Balancer (ALB)** → Distributes traffic across ECS tasks in two availability zones for high availability
+4. **Target Groups (Blue/Green)** → CodeDeploy manages blue/green deployments with two target groups, allowing zero-downtime deployments
+5. **ECS Service** → Single ECS service running Fargate tasks in private subnets
+6. **ECS Tasks** → Containerized FastAPI application instances running across multiple availability zones
+
+**Networking:**
+- **Public Subnets** (2 AZs): Host the ALB with Internet Gateway for inbound traffic
+- **Private Subnets** (2 AZs): Host ECS tasks with no public IPs for security
+- **VPC Endpoints**: Enable ECS tasks to access AWS services (DynamoDB, ECR, CloudWatch Logs, S3) without NAT gateways, saving ~$64/month
+
+**Data Layer:**
+- **DynamoDB**: Stores URL mappings with PAY_PER_REQUEST billing for cost efficiency
+- **CloudWatch Logs**: Centralized logging for all application logs
+
+**CI/CD Pipeline:**
+- **GitHub Actions**: Automated CI/CD using OIDC authentication (no static credentials)
+- **ECR**: Container registry for Docker images
+- **CodeDeploy**: Manages blue/green deployments with automatic rollback on failures
+
+**Key Features Highlighted:**
+- High availability across 2 availability zones
+- Security: Private subnets, WAF protection, least-privilege IAM
+- Cost optimization: VPC endpoints instead of NAT gateways, PAY_PER_REQUEST DynamoDB
+- Zero-downtime deployments via blue/green strategy
+- Production-ready monitoring with CloudWatch
+
 ## Project Structure
 
 ```
