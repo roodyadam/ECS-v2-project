@@ -151,7 +151,7 @@ jobs:
           IMAGE_REPO=$(echo "$NEW_IMAGE" | cut -d: -f1 | sed 's|.*/||')
           IMAGE_TAG=$(echo "$NEW_IMAGE" | cut -d: -f2)
           
-          if aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
+          if ! aws ecr describe-images --repository-name $IMAGE_REPO --image-ids imageTag=$IMAGE_TAG --query 'imageDetails[0].imageTags' --output json 2>/dev/null; then
             echo "::error::Image with tag $IMAGE_TAG not found in ECR."
             echo "::error::Expected image: $NEW_IMAGE"
             echo "::error::This means CI workflow may not have pushed the image successfully."

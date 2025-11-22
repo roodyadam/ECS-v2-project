@@ -3,11 +3,6 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
-output "alb_arn" {
-  description = "ARN of the Application Load Balancer"
-  value       = module.alb.alb_arn
-}
-
 output "ecr_repository_url" {
   description = "URL of the ECR repository"
   value       = module.ecr.repository_url

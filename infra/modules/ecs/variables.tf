@@ -13,11 +13,6 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
-variable "alb_arn" {
-  description = "ARN of the Application Load Balancer"
-  type        = string
-}
-
 variable "alb_security_group_id" {
   description = "Security group ID of the ALB"
   type        = string

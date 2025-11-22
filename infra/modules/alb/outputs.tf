@@ -13,16 +13,6 @@ output "blue_target_group_arn" {
   value       = aws_lb_target_group.blue.arn
 }
 
-output "green_target_group_arn" {
-  description = "ARN of the green target group"
-  value       = aws_lb_target_group.green.arn
-}
-
-output "waf_web_acl_arn" {
-  description = "ARN of the WAF Web ACL"
-  value       = aws_wafv2_web_acl.main.arn
-}
-
 output "alb_security_group_id" {
   description = "Security group ID of the ALB"
   value       = aws_security_group.alb.id

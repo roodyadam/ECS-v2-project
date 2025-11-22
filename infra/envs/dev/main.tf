@@ -70,7 +70,6 @@ module "ecs" {
   project_name          = var.project_name
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
-  alb_arn               = module.alb.alb_arn
   alb_security_group_id = module.alb.alb_security_group_id
   blue_target_group_arn = module.alb.blue_target_group_arn
   execution_role_arn    = module.iam.ecs_execution_role_arn
