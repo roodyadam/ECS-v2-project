@@ -28,8 +28,8 @@ jobs:
     steps:
       - name: Validate confirmation input
         run: |
-          if [ "${{ inputs.confirm_destroy }}" != "destroy" ]; then
-            echo "::error::Invalid confirmation. You must type exactly 'destroy' to proceed."
+          if [[ ! "${{ inputs.confirm_destroy }}" =~ ^[[:space:]]*destroy[[:space:]]*$ ]]; then
+            echo "::error::Invalid confirmation. You must type 'destroy' to proceed."
             echo "::error::Received: '${{ inputs.confirm_destroy }}'"
             exit 1
           fi
