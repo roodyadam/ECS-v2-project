@@ -33,24 +33,18 @@ def _validate_url(url: str) -> str:
     
     url = url.strip()
     
-    # Parse the URL
     parsed = urlparse(url)
     
-    # Check if URL has a scheme (http/https)
     if not parsed.scheme:
-        # If no scheme, try adding https://
         url = f"https://{url}"
         parsed = urlparse(url)
     
-    # Validate scheme is http or https
     if parsed.scheme not in ("http", "https"):
         raise ValueError("URL must use http or https protocol")
     
-    # Validate that URL has a netloc (domain)
     if not parsed.netloc:
         raise ValueError("URL must contain a valid domain")
     
-    # Basic domain validation (must contain at least one dot or be localhost)
     if parsed.netloc != "localhost" and "." not in parsed.netloc:
         raise ValueError("URL must contain a valid domain")
     
@@ -68,7 +62,6 @@ async def shorten(req: Request):
         raise HTTPException(400, "url required")
     
     try:
-        # Validate and normalize URL
         validated_url = _validate_url(url)
     except ValueError as e:
         raise HTTPException(400, str(e))

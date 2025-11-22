@@ -181,7 +181,6 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rate limit POST /shorten (count mode)
   rule {
     name     = "RateLimitShorten"
     priority = 4
@@ -234,7 +233,6 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Enforce Content-Type application/json on POST /shorten (count mode)
   rule {
     name     = "ShortenJsonContentType"
     priority = 5
