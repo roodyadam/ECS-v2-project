@@ -57,10 +57,6 @@ resource "aws_route_table" "public" {
   tags = {
     Name = "${var.project_name}-public-rt"
   }
-
-  lifecycle {
-    create_before_destroy = false
-  }
 }
 
 resource "aws_route_table_association" "public" {
