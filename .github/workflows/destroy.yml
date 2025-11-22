@@ -75,15 +75,6 @@ jobs:
             fi
           done
 
-      - name: Pre-destroy plan
-        working-directory: ./infra/envs/dev
-        continue-on-error: true
-        run: |
-          echo "::notice::Generating destroy plan to show what will be destroyed..."
-          terraform plan -destroy -out=tfplan || {
-            echo "::warning::Plan generation failed, but continuing with destroy..."
-          }
-
       - name: Get ALB ARN from Terraform
         working-directory: ./infra/envs/dev
         id: alb_arn
@@ -113,6 +104,32 @@ jobs:
             --attributes Key=deletion_protection.enabled,Value=false || true
           echo "✓ Disabled deletion protection for ALB"
 
+      - name: Destroy ALB and wait for ENIs to be released
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          echo "::notice::Destroying ALB (releases public IPs from ENIs)..."
+          terraform destroy -target=module.alb.aws_lb.main \
+            -auto-approve -input=false || true
+          
+          ALB_ARN="${{ steps.alb_arn.outputs.alb_arn }}"
+          if [ -n "$ALB_ARN" ]; then
+            echo "::notice::Waiting for ALB ENIs to be released..."
+            for i in {1..12}; do
+              STATUS=$(aws elbv2 describe-load-balancers \
+                --region ${{ env.AWS_REGION }} \
+                --load-balancer-arns "$ALB_ARN" \
+                --query 'LoadBalancers[0].State.Code' \
+                --output text 2>/dev/null || echo "not-found")
+              if [ "$STATUS" == "not-found" ] || [ "$STATUS" == "None" ]; then
+                echo "✓ ALB deleted, ENIs released"
+                break
+              fi
+              sleep 10
+            done
+          fi
+          sleep 10
+
       - name: Destroy route before IGW
         working-directory: ./infra/envs/dev
         continue-on-error: true
@@ -121,11 +138,7 @@ jobs:
           terraform destroy -target=module.vpc.aws_route.public_internet \
             -auto-approve -input=false || true
           sleep 5
-          echo "::notice::Route destroyed, proceeding with full destroy"
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
-        run: |
-          echo "::notice::Starting full infrastructure destruction..."
-          terraform destroy -auto-approve -input=false
-          echo "::notice::Infrastructure destruction completed"
+        run: terraform destroy -auto-approve -input=false
