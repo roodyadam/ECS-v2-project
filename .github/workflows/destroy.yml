@@ -75,6 +75,18 @@ jobs:
             fi
           done
 
+      - name: Disable ALB deletion protection
+        continue-on-error: true
+        run: |
+          ALB_ARN=$(terraform output -raw alb_arn 2>/dev/null || echo "")
+          if [ -n "$ALB_ARN" ]; then
+            aws elbv2 modify-load-balancer-attributes \
+              --region ${{ env.AWS_REGION }} \
+              --load-balancer-arn "$ALB_ARN" \
+              --attributes Key=deletion_protection.enabled,Value=false || true
+            echo "✓ Disabled ALB deletion protection"
+          fi
+
       - name: Destroy in order
         working-directory: ./infra/envs/dev
         continue-on-error: true
@@ -91,15 +103,6 @@ jobs:
           terraform destroy -target=module.vpc.aws_route.public_internet \
             -auto-approve -input=false || true
           sleep 10
-
-      - name: Terraform Destroy (remaining resources)
-        working-directory: ./infra/envs/dev
-        continue-on-error: true
-        run: |
-          echo "::notice::Destroying route that references IGW..."
-          terraform destroy -target=module.vpc.aws_route.public_internet \
-            -auto-approve -input=false || true
-          sleep 5
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
