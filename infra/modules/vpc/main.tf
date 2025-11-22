@@ -33,7 +33,7 @@ resource "aws_internet_gateway" "main" {
   }
   
   timeouts {
-    delete = "5m"
+    delete = "10m"
   }
 }
 
@@ -56,12 +56,20 @@ resource "aws_route_table" "public" {
   tags = {
     Name = "${var.project_name}-public-rt"
   }
+  
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "aws_route" "public_internet" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.main.id
+  
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 resource "aws_route_table_association" "public" {

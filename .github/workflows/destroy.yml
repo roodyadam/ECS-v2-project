@@ -113,24 +113,6 @@ jobs:
             --attributes Key=deletion_protection.enabled,Value=false || true
           echo "✓ Disabled deletion protection for ALB"
 
-      - name: Force remove route and delete IGW
-        continue-on-error: true
-        run: |
-          VPC_ID=$(terraform -chdir=./infra/envs/dev output -raw vpc_id 2>/dev/null || echo "")
-          [ -z "$VPC_ID" ] && exit 0
-          
-          IGW_ID=$(aws ec2 describe-internet-gateways --region ${{ env.AWS_REGION }} --filters "Name=attachment.vpc-id,Values=$VPC_ID" --query "InternetGateways[0].InternetGatewayId" --output text)
-          [ -z "$IGW_ID" ] || [ "$IGW_ID" == "None" ] && exit 0
-          
-          for RT_ID in $(aws ec2 describe-route-tables --region ${{ env.AWS_REGION }} --filters "Name=vpc-id,Values=$VPC_ID" --query "RouteTables[].RouteTableId" --output text); do
-            aws ec2 delete-route --region ${{ env.AWS_REGION }} --route-table-id "$RT_ID" --destination-cidr-block "0.0.0.0/0" 2>/dev/null || true
-          done
-          
-          sleep 3
-          aws ec2 detach-internet-gateway --region ${{ env.AWS_REGION }} --internet-gateway-id "$IGW_ID" --vpc-id "$VPC_ID" 2>/dev/null || true
-          sleep 2
-          aws ec2 delete-internet-gateway --region ${{ env.AWS_REGION }} --internet-gateway-id "$IGW_ID" 2>/dev/null || true
-
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
         run: |
