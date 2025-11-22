@@ -44,6 +44,28 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
 
+      - name: Clear stale Terraform lock
+        working-directory: ./infra/envs/dev
+        run: |
+          set +e
+          LOCK_ID="envs/dev/terraform.tfstate"
+          FULL_LOCK_ID="${{ env.TF_STATE_BUCKET }}/envs/dev/terraform.tfstate"
+          for lock in "$LOCK_ID" "$FULL_LOCK_ID"; do
+            aws dynamodb get-item \
+              --region ${{ env.AWS_REGION }} \
+              --table-name terraform-state-lock \
+              --key "{\"LockID\":{\"S\":\"$lock\"}}" \
+              --query 'Item' \
+              --output text >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+              aws dynamodb delete-item \
+                --region ${{ env.AWS_REGION }} \
+                --table-name terraform-state-lock \
+                --key "{\"LockID\":{\"S\":\"$lock\"}}" || true
+              echo "Cleared lock: $lock"
+            fi
+          done
+
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
         run: terraform destroy -auto-approve -input=false
