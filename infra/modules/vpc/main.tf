@@ -57,10 +57,6 @@ resource "aws_route_table" "public" {
   tags = {
     Name = "${var.project_name}-public-rt"
   }
-
-  depends_on = [
-    aws_route_table_association.public
-  ]
 }
 
 resource "aws_route_table_association" "public" {

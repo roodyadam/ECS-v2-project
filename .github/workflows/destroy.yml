@@ -66,6 +66,17 @@ jobs:
             fi
           done
 
+      - name: Destroy route tables first
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          terraform destroy \
+            -target=module.vpc.aws_route_table_association.public \
+            -target=module.vpc.aws_route_table.public \
+            -target=module.vpc.aws_route_table_association.private \
+            -target=module.vpc.aws_route_table.private \
+            -auto-approve -input=false || true
+
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
         run: terraform destroy -auto-approve -input=false
