@@ -66,7 +66,39 @@ jobs:
             fi
           done
 
-      - name: Destroy route tables first
+      - name: Disable ALB deletion protection
+        continue-on-error: true
+        run: |
+          ALB_ARNS=$(aws elbv2 describe-load-balancers \
+            --region ${{ env.AWS_REGION }} \
+            --query "LoadBalancers[].LoadBalancerArn" \
+            --output text)
+          for ALB_ARN in $ALB_ARNS; do
+            if [ ! -z "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+              aws elbv2 modify-load-balancer-attributes \
+                --region ${{ env.AWS_REGION }} \
+                --load-balancer-arn "$ALB_ARN" \
+                --attributes Key=deletion_protection.enabled,Value=false || true
+              echo "Disabled deletion protection for ALB: $ALB_ARN"
+            fi
+          done
+
+      - name: Destroy ALB and related resources first
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          terraform destroy \
+            -target=module.alb.aws_lb.main \
+            -target=module.alb.aws_lb_listener.main \
+            -target=module.alb.aws_lb_target_group.blue \
+            -target=module.alb.aws_lb_target_group.green \
+            -target=module.alb.aws_security_group.alb \
+            -auto-approve -input=false || true
+
+      - name: Wait for ALB deletion to propagate
+        run: sleep 30
+
+      - name: Destroy route tables
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
@@ -76,6 +108,9 @@ jobs:
             -target=module.vpc.aws_route_table_association.private \
             -target=module.vpc.aws_route_table.private \
             -auto-approve -input=false || true
+
+      - name: Wait for route table deletion to propagate
+        run: sleep 15
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
