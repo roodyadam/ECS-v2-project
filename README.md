@@ -48,6 +48,20 @@ This diagram illustrates the complete architecture of the URL shortener service 
 - Zero-downtime deployments via blue/green strategy
 - Production-ready monitoring with CloudWatch
 
+## Demo
+
+Watch the application in action: [Demo Video](https://www.loom.com/share/dce56fa7c9c3468e86c68778e4b5ae0f)
+
+This demo showcases the URL shortener service working in production:
+
+- **Live Application**: The service is deployed and accessible via the Application Load Balancer
+- **URL Shortening**: Demonstrates creating short URLs from long URLs using the `/shorten` endpoint
+- **URL Validation**: Shows the application validating and normalizing URLs before storage
+- **Redirect Functionality**: Tests the shortened URL redirect to verify the original URL is correctly retrieved from DynamoDB
+- **End-to-End Flow**: Complete workflow from URL submission to successful redirect, demonstrating the full stack integration (ALB → ECS Fargate → DynamoDB)
+
+The demo validates that all components are working together: the FastAPI application, ECS tasks, DynamoDB storage, and the load balancer routing traffic correctly.
+
 ## Project Structure
 
 ```
