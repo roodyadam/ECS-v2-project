@@ -159,12 +159,17 @@ jobs:
           
           echo "::warning::ALB deletion propagation timeout, but continuing..."
 
-      - name: Destroy route tables
+      - name: Destroy route tables and VPC endpoints
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
-          echo "::notice::Destroying route tables and associations..."
+          echo "::notice::Destroying route tables, associations, and VPC endpoints..."
           terraform destroy \
+            -target=module.vpc.aws_vpc_endpoint.s3 \
+            -target=module.vpc.aws_vpc_endpoint.dynamodb \
+            -target=module.vpc.aws_vpc_endpoint.ecr_api \
+            -target=module.vpc.aws_vpc_endpoint.ecr_dkr \
+            -target=module.vpc.aws_vpc_endpoint.logs \
             -target=module.vpc.aws_route_table_association.public \
             -target=module.vpc.aws_route_table.public \
             -target=module.vpc.aws_route_table_association.private \
