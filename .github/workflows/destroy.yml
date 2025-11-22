@@ -130,6 +130,46 @@ jobs:
           fi
           sleep 10
 
+      - name: Wait for all ENIs with public IPs to be released
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          echo "::notice::Checking for ENIs with public IPs in VPC..."
+          VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
+          if [ -z "$VPC_ID" ]; then
+            echo "VPC ID not found, skipping ENI check"
+            exit 0
+          fi
+          
+          echo "Waiting for all ENIs with public IPs to be released..."
+          for i in {1..30}; do
+            ENIS_WITH_PUBLIC_IP=$(aws ec2 describe-network-interfaces \
+              --region ${{ env.AWS_REGION }} \
+              --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.public-ip,Values=*" \
+              --query 'NetworkInterfaces[].NetworkInterfaceId' \
+              --output text 2>/dev/null || echo "")
+            
+            if [ -z "$ENIS_WITH_PUBLIC_IP" ] || [ "$ENIS_WITH_PUBLIC_IP" == "None" ]; then
+              echo "✓ All ENIs with public IPs released"
+              break
+            fi
+            
+            ENI_COUNT=$(echo "$ENIS_WITH_PUBLIC_IP" | wc -w)
+            echo "Found $ENI_COUNT ENI(s) with public IPs, waiting... (attempt $i/30)"
+            sleep 10
+          done
+          
+          REMAINING_ENIS=$(aws ec2 describe-network-interfaces \
+            --region ${{ env.AWS_REGION }} \
+            --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.public-ip,Values=*" \
+            --query 'NetworkInterfaces[].NetworkInterfaceId' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$REMAINING_ENIS" ] && [ "$REMAINING_ENIS" != "None" ]; then
+            echo "::warning::Some ENIs with public IPs still exist, but proceeding..."
+          fi
+          sleep 5
+
       - name: Destroy route before IGW
         working-directory: ./infra/envs/dev
         continue-on-error: true
