@@ -113,6 +113,32 @@ jobs:
             --attributes Key=deletion_protection.enabled,Value=false || true
           echo "✓ Disabled deletion protection for ALB"
 
+      - name: Force detach IGW if needed
+        continue-on-error: true
+        run: |
+          VPC_ID=$(terraform -chdir=./infra/envs/dev output -raw vpc_id 2>/dev/null || echo "")
+          if [ -z "$VPC_ID" ]; then
+            echo "Could not get VPC ID, skipping IGW force detach"
+            exit 0
+          fi
+          
+          IGW_ID=$(aws ec2 describe-internet-gateways \
+            --region ${{ env.AWS_REGION }} \
+            --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
+            --query "InternetGateways[0].InternetGatewayId" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ ! -z "$IGW_ID" ] && [ "$IGW_ID" != "None" ]; then
+            echo "Force detaching IGW: $IGW_ID from VPC: $VPC_ID"
+            aws ec2 detach-internet-gateway \
+              --region ${{ env.AWS_REGION }} \
+              --internet-gateway-id "$IGW_ID" \
+              --vpc-id "$VPC_ID" || true
+            echo "✓ IGW force detach attempted"
+          else
+            echo "No IGW found, skipping"
+          fi
+
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
         run: |
