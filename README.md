@@ -13,7 +13,7 @@ A production-ready URL shortener service deployed on AWS ECS Fargate with blue/g
 
 ## Architecture
 
-![Architecture Diagram](images/Architecture-ecs-v2.jpg)
+![Architecture Diagram](images/Architecture-v2-ecs.jpg)
 
 ### Architecture Explanation
 
