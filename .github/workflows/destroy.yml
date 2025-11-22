@@ -26,14 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Validate confirmation input
+      - name: Validate confirmation
         run: |
           if [[ ! "${{ inputs.confirm_destroy }}" =~ ^[[:space:]]*destroy[[:space:]]*$ ]]; then
             echo "::error::Invalid confirmation. You must type 'destroy' to proceed."
-            echo "::error::Received: '${{ inputs.confirm_destroy }}'"
             exit 1
           fi
-          echo "✓ Confirmation validated"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -53,55 +51,26 @@ jobs:
         working-directory: ./infra/envs/dev
         run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
 
-      - name: Clear stale Terraform lock
+      - name: Clear stale lock
         working-directory: ./infra/envs/dev
         run: |
-          set +e
-          LOCK_ID="envs/dev/terraform.tfstate"
-          FULL_LOCK_ID="${{ env.TF_STATE_BUCKET }}/envs/dev/terraform.tfstate"
-          for lock in "$LOCK_ID" "$FULL_LOCK_ID"; do
-            aws dynamodb get-item \
+          for lock in "envs/dev/terraform.tfstate" "${{ env.TF_STATE_BUCKET }}/envs/dev/terraform.tfstate"; do
+            aws dynamodb delete-item \
               --region ${{ env.AWS_REGION }} \
               --table-name terraform-state-lock \
-              --key "{\"LockID\":{\"S\":\"$lock\"}}" \
-              --query 'Item' \
-              --output text >/dev/null 2>&1
-            if [ $? -eq 0 ]; then
-              aws dynamodb delete-item \
-                --region ${{ env.AWS_REGION }} \
-                --table-name terraform-state-lock \
-                --key "{\"LockID\":{\"S\":\"$lock\"}}" || true
-              echo "Cleared lock: $lock"
-            fi
+              --key "{\"LockID\":{\"S\":\"$lock\"}}" 2>/dev/null || true
           done
 
-      - name: Disable ALB deletion protection
-        continue-on-error: true
-        run: |
-          ALB_ARN=$(terraform output -raw alb_arn 2>/dev/null || echo "")
-          if [ -n "$ALB_ARN" ]; then
-            aws elbv2 modify-load-balancer-attributes \
-              --region ${{ env.AWS_REGION }} \
-              --load-balancer-arn "$ALB_ARN" \
-              --attributes Key=deletion_protection.enabled,Value=false || true
-            echo "✓ Disabled ALB deletion protection"
-          fi
-
-      - name: Destroy in order
+      - name: Destroy resources in order
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
-          echo "Step 1: Destroying ALB (releases ENIs and public IPs)..."
-          terraform destroy -target=module.alb -auto-approve -input=false || true
+          set +e
+          terraform destroy -target=module.alb -auto-approve -input=false
           sleep 60
-          
-          echo "Step 2: Destroying ECS service..."
-          terraform destroy -target=module.ecs -auto-approve -input=false || true
+          terraform destroy -target=module.ecs -auto-approve -input=false
           sleep 30
-          
-          echo "Step 3: Destroying route..."
-          terraform destroy -target=module.vpc.aws_route.public_internet \
-            -auto-approve -input=false || true
+          terraform destroy -target=module.vpc.aws_route.public_internet -auto-approve -input=false
           sleep 10
 
       - name: Terraform Destroy
