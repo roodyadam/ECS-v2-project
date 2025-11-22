@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 import os, hashlib, time
+from urllib.parse import urlparse
 from .ddb import put_mapping, get_mapping
 
 app = FastAPI()
@@ -25,19 +26,66 @@ def root():
 def health():
     return {"status": "ok", "ts": int(time.time())}
 
+def _validate_url(url: str) -> str:
+    """Validate and normalize URL format"""
+    if not url or not isinstance(url, str):
+        raise ValueError("URL must be a non-empty string")
+    
+    url = url.strip()
+    
+    # Parse the URL
+    parsed = urlparse(url)
+    
+    # Check if URL has a scheme (http/https)
+    if not parsed.scheme:
+        # If no scheme, try adding https://
+        url = f"https://{url}"
+        parsed = urlparse(url)
+    
+    # Validate scheme is http or https
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL must use http or https protocol")
+    
+    # Validate that URL has a netloc (domain)
+    if not parsed.netloc:
+        raise ValueError("URL must contain a valid domain")
+    
+    # Basic domain validation (must contain at least one dot or be localhost)
+    if parsed.netloc != "localhost" and "." not in parsed.netloc:
+        raise ValueError("URL must contain a valid domain")
+    
+    return url
+
 @app.post("/shorten")
 async def shorten(req: Request):
-    body = await req.json()
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON in request body")
+    
     url = body.get("url")
     if not url:
         raise HTTPException(400, "url required")
-    short = hashlib.sha256(url.encode()).hexdigest()[:8]
-    put_mapping(short, url)
-    return {"short": short, "url": url}
+    
+    try:
+        # Validate and normalize URL
+        validated_url = _validate_url(url)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    
+    short = hashlib.sha256(validated_url.encode()).hexdigest()[:8]
+    try:
+        put_mapping(short, validated_url)
+    except RuntimeError as e:
+        raise HTTPException(503, f"Service temporarily unavailable: {str(e)}")
+    return {"short": short, "url": validated_url}
 
 @app.get("/s/{short_id}")
 def resolve(short_id: str):
-    item = get_mapping(short_id)
+    try:
+        item = get_mapping(short_id)
+    except RuntimeError as e:
+        raise HTTPException(503, f"Service temporarily unavailable: {str(e)}")
     if not item:
         raise HTTPException(404, "not found")
     return RedirectResponse(item["url"])

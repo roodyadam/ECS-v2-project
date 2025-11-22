@@ -32,7 +32,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.public_subnet_ids
 
-  enable_deletion_protection = false
+  enable_deletion_protection = true
 
   tags = {
     Name = "${var.project_name}-alb"

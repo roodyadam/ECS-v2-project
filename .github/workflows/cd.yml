@@ -18,6 +18,7 @@ permissions:
 env:
   AWS_REGION: eu-west-2
   TF_VERSION: 1.5.0
+  TF_STATE_BUCKET: ecs-v2-terraform-state-roodyadams-88975-eu-west-2
 
 jobs:
   terraform-apply:
@@ -57,7 +58,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./infra/envs/dev
-        run: terraform init
+        run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
 
       - name: Create terraform.tfvars
         working-directory: ./infra/envs/dev
@@ -94,7 +95,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./infra/envs/dev
-        run: terraform apply -auto-approve -input=false -lock=false
+        run: terraform apply -auto-approve -input=false
 
 
   codedeploy-deploy:
@@ -121,7 +122,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: ./infra/envs/dev
-        run: terraform init
+        run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET }}"
 
       - name: Get infrastructure outputs
         id: get-outputs

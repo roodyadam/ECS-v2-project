@@ -9,7 +9,6 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "ecs-v2-terraform-state-roodyadams-88975-eu-west-2"
     key            = "envs/dev/terraform.tfstate"
     region         = "eu-west-2"
     dynamodb_table = "terraform-state-lock"
