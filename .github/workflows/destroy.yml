@@ -113,6 +113,16 @@ jobs:
             --attributes Key=deletion_protection.enabled,Value=false || true
           echo "✓ Disabled deletion protection for ALB"
 
+      - name: Destroy route before IGW
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          echo "::notice::Destroying route that references IGW..."
+          terraform destroy -target=module.vpc.aws_route.public_internet \
+            -auto-approve -input=false || true
+          sleep 5
+          echo "::notice::Route destroyed, proceeding with full destroy"
+
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
         run: |
