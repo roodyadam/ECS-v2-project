@@ -75,102 +75,24 @@ jobs:
             fi
           done
 
-      - name: Get ALB ARN from Terraform
-        working-directory: ./infra/envs/dev
-        id: alb_arn
-        continue-on-error: true
-        run: |
-          ALB_ARN=$(terraform output -raw alb_arn 2>/dev/null || echo "")
-          if [ -z "$ALB_ARN" ]; then
-            echo "No ALB found in Terraform state (may already be destroyed)"
-            echo "alb_arn=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          echo "alb_arn=$ALB_ARN" >> $GITHUB_OUTPUT
-          echo "Found ALB ARN: $ALB_ARN"
-
-      - name: Disable ALB deletion protection
-        continue-on-error: true
-        run: |
-          ALB_ARN="${{ steps.alb_arn.outputs.alb_arn }}"
-          if [ -z "$ALB_ARN" ]; then
-            echo "No ALB ARN available, skipping deletion protection disable"
-            exit 0
-          fi
-          echo "Disabling deletion protection for ALB: $ALB_ARN"
-          aws elbv2 modify-load-balancer-attributes \
-            --region ${{ env.AWS_REGION }} \
-            --load-balancer-arn "$ALB_ARN" \
-            --attributes Key=deletion_protection.enabled,Value=false || true
-          echo "✓ Disabled deletion protection for ALB"
-
-      - name: Destroy ALB and wait for ENIs to be released
+      - name: Destroy in order
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
-          echo "::notice::Destroying ALB (releases public IPs from ENIs)..."
-          terraform destroy -target=module.alb.aws_lb.main \
-            -auto-approve -input=false || true
+          echo "Step 1: Destroying ALB (releases ENIs and public IPs)..."
+          terraform destroy -target=module.alb -auto-approve -input=false || true
+          sleep 60
           
-          ALB_ARN="${{ steps.alb_arn.outputs.alb_arn }}"
-          if [ -n "$ALB_ARN" ]; then
-            echo "::notice::Waiting for ALB ENIs to be released..."
-            for i in {1..12}; do
-              STATUS=$(aws elbv2 describe-load-balancers \
-                --region ${{ env.AWS_REGION }} \
-                --load-balancer-arns "$ALB_ARN" \
-                --query 'LoadBalancers[0].State.Code' \
-                --output text 2>/dev/null || echo "not-found")
-              if [ "$STATUS" == "not-found" ] || [ "$STATUS" == "None" ]; then
-                echo "✓ ALB deleted, ENIs released"
-                break
-              fi
-              sleep 10
-            done
-          fi
+          echo "Step 2: Destroying ECS service..."
+          terraform destroy -target=module.ecs -auto-approve -input=false || true
+          sleep 30
+          
+          echo "Step 3: Destroying route..."
+          terraform destroy -target=module.vpc.aws_route.public_internet \
+            -auto-approve -input=false || true
           sleep 10
 
-      - name: Wait for all ENIs with public IPs to be released
-        working-directory: ./infra/envs/dev
-        continue-on-error: true
-        run: |
-          echo "::notice::Checking for ENIs with public IPs in VPC..."
-          VPC_ID=$(terraform output -raw vpc_id 2>/dev/null || echo "")
-          if [ -z "$VPC_ID" ]; then
-            echo "VPC ID not found, skipping ENI check"
-            exit 0
-          fi
-          
-          echo "Waiting for all ENIs with public IPs to be released..."
-          for i in {1..30}; do
-            ENIS_WITH_PUBLIC_IP=$(aws ec2 describe-network-interfaces \
-              --region ${{ env.AWS_REGION }} \
-              --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.public-ip,Values=*" \
-              --query 'NetworkInterfaces[].NetworkInterfaceId' \
-              --output text 2>/dev/null || echo "")
-            
-            if [ -z "$ENIS_WITH_PUBLIC_IP" ] || [ "$ENIS_WITH_PUBLIC_IP" == "None" ]; then
-              echo "✓ All ENIs with public IPs released"
-              break
-            fi
-            
-            ENI_COUNT=$(echo "$ENIS_WITH_PUBLIC_IP" | wc -w)
-            echo "Found $ENI_COUNT ENI(s) with public IPs, waiting... (attempt $i/30)"
-            sleep 10
-          done
-          
-          REMAINING_ENIS=$(aws ec2 describe-network-interfaces \
-            --region ${{ env.AWS_REGION }} \
-            --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.public-ip,Values=*" \
-            --query 'NetworkInterfaces[].NetworkInterfaceId' \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -n "$REMAINING_ENIS" ] && [ "$REMAINING_ENIS" != "None" ]; then
-            echo "::warning::Some ENIs with public IPs still exist, but proceeding..."
-          fi
-          sleep 5
-
-      - name: Destroy route before IGW
+      - name: Terraform Destroy (remaining resources)
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
