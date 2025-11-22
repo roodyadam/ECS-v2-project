@@ -48,6 +48,38 @@ This diagram illustrates the complete architecture of the URL shortener service 
 - Zero-downtime deployments via blue/green strategy
 - Production-ready monitoring with CloudWatch
 
+## Blue/Green Deployment Process
+
+The deployment process uses AWS CodeDeploy to manage zero-downtime blue/green deployments:
+
+### Step 1: Deployment Initiated
+![CodeDeploy Stage 1](images/CodedeploySt1.jpg)
+
+Deployment starts while the application continues running on the blue target group. Traffic remains on the existing version, ensuring no service interruption.
+
+### Step 2: Application Verification
+![Web Stage 1](images/webstg1.jpg)
+
+The application continues to function normally during deployment, serving requests from the blue target group.
+
+### Step 3: Traffic Shift Complete
+![CodeDeploy Stage 2](images/Codedeployst2.jpg)
+
+CodeDeploy shifts traffic to the green target group with the new version. The switch is seamless with no downtime.
+
+### Step 4: Post-Deployment Verification
+![Web Stage 2](images/webstg2.jpg)
+
+The application continues working correctly after the traffic shift, now serving from the green target group.
+
+### Benefits
+
+- **Zero Downtime**: Traffic shifts seamlessly between target groups
+- **Automatic Rollback**: Failed deployments automatically revert to the previous version
+- **Health Checks**: CodeDeploy monitors deployment health and rolls back on failures
+- **Gradual Traffic Shift**: Traffic can be shifted incrementally for safer deployments
+- **Production Safety**: Old version remains available until new version is verified
+
 ## Demo
 
 Watch the application in action: [Demo Video](https://www.loom.com/share/dce56fa7c9c3468e86c68778e4b5ae0f)

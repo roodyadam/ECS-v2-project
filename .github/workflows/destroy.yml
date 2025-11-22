@@ -26,6 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Validate confirmation input
+        run: |
+          if [ "${{ inputs.confirm_destroy }}" != "destroy" ]; then
+            echo "::error::Invalid confirmation. You must type exactly 'destroy' to proceed."
+            echo "::error::Received: '${{ inputs.confirm_destroy }}'"
+            exit 1
+          fi
+          echo "✓ Confirmation validated"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -66,27 +75,49 @@ jobs:
             fi
           done
 
+      - name: Pre-destroy plan
+        working-directory: ./infra/envs/dev
+        continue-on-error: true
+        run: |
+          echo "::notice::Generating destroy plan to show what will be destroyed..."
+          terraform plan -destroy -out=tfplan || {
+            echo "::warning::Plan generation failed, but continuing with destroy..."
+          }
+
+      - name: Get ALB ARN from Terraform
+        working-directory: ./infra/envs/dev
+        id: alb_arn
+        continue-on-error: true
+        run: |
+          ALB_ARN=$(terraform output -raw alb_arn 2>/dev/null || echo "")
+          if [ -z "$ALB_ARN" ]; then
+            echo "No ALB found in Terraform state (may already be destroyed)"
+            echo "alb_arn=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "alb_arn=$ALB_ARN" >> $GITHUB_OUTPUT
+          echo "Found ALB ARN: $ALB_ARN"
+
       - name: Disable ALB deletion protection
         continue-on-error: true
         run: |
-          ALB_ARNS=$(aws elbv2 describe-load-balancers \
+          ALB_ARN="${{ steps.alb_arn.outputs.alb_arn }}"
+          if [ -z "$ALB_ARN" ]; then
+            echo "No ALB ARN available, skipping deletion protection disable"
+            exit 0
+          fi
+          echo "Disabling deletion protection for ALB: $ALB_ARN"
+          aws elbv2 modify-load-balancer-attributes \
             --region ${{ env.AWS_REGION }} \
-            --query "LoadBalancers[].LoadBalancerArn" \
-            --output text)
-          for ALB_ARN in $ALB_ARNS; do
-            if [ ! -z "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
-              aws elbv2 modify-load-balancer-attributes \
-                --region ${{ env.AWS_REGION }} \
-                --load-balancer-arn "$ALB_ARN" \
-                --attributes Key=deletion_protection.enabled,Value=false || true
-              echo "Disabled deletion protection for ALB: $ALB_ARN"
-            fi
-          done
+            --load-balancer-arn "$ALB_ARN" \
+            --attributes Key=deletion_protection.enabled,Value=false || true
+          echo "✓ Disabled deletion protection for ALB"
 
       - name: Destroy ALB and related resources first
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
+          echo "::notice::Destroying ALB and related resources..."
           terraform destroy \
             -target=module.alb.aws_lb.main \
             -target=module.alb.aws_lb_listener.main \
@@ -96,12 +127,43 @@ jobs:
             -auto-approve -input=false || true
 
       - name: Wait for ALB deletion to propagate
-        run: sleep 30
+        continue-on-error: true
+        run: |
+          ALB_ARN="${{ steps.alb_arn.outputs.alb_arn }}"
+          if [ -z "$ALB_ARN" ]; then
+            echo "No ALB ARN available, skipping wait"
+            exit 0
+          fi
+          
+          MAX_WAIT=300
+          ELAPSED=0
+          INTERVAL=5
+          
+          echo "Waiting for ALB deletion to propagate (max ${MAX_WAIT}s)..."
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            ALB_EXISTS=$(aws elbv2 describe-load-balancers \
+              --region ${{ env.AWS_REGION }} \
+              --load-balancer-arns "$ALB_ARN" \
+              --query "length(LoadBalancers)" \
+              --output text 2>/dev/null || echo "0")
+            
+            if [ "$ALB_EXISTS" == "0" ] || [ -z "$ALB_EXISTS" ]; then
+              echo "✓ ALB deletion confirmed"
+              exit 0
+            fi
+            
+            echo "  ALB still exists, waiting... (${ELAPSED}s/${MAX_WAIT}s)"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          echo "::warning::ALB deletion propagation timeout, but continuing..."
 
       - name: Destroy route tables
         working-directory: ./infra/envs/dev
         continue-on-error: true
         run: |
+          echo "::notice::Destroying route tables and associations..."
           terraform destroy \
             -target=module.vpc.aws_route_table_association.public \
             -target=module.vpc.aws_route_table.public \
@@ -110,8 +172,23 @@ jobs:
             -auto-approve -input=false || true
 
       - name: Wait for route table deletion to propagate
-        run: sleep 15
+        continue-on-error: true
+        run: |
+          MAX_WAIT=60
+          ELAPSED=0
+          INTERVAL=5
+          
+          echo "Waiting for route table deletion to propagate (max ${MAX_WAIT}s)..."
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            echo "  Waiting for AWS propagation... (${ELAPSED}s/${MAX_WAIT}s)"
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          echo "✓ Propagation wait completed"
 
       - name: Terraform Destroy
         working-directory: ./infra/envs/dev
-        run: terraform destroy -auto-approve -input=false
+        run: |
+          echo "::notice::Starting full infrastructure destruction..."
+          terraform destroy -auto-approve -input=false
+          echo "::notice::Infrastructure destruction completed"
