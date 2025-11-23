@@ -17,8 +17,6 @@ WORKDIR /app
 
 COPY --from=dependencies /install /home/appuser/.local
 
-ARG BUILD_ID
-ENV BUILD_ID=${BUILD_ID}
 COPY src/ ./src
 
 RUN chown -R appuser:appuser /app
